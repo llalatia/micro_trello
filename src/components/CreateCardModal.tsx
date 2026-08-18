@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Card, StepDefinition, UserProfile, CardAttachment } from '../types';
+import { Card, StepDefinition, UserProfile, CardAttachment, CardLabel, CardMerchandiser } from '../types';
 import { canUserCreateOrEditCards } from '../utils/permissions';
-import { X, Plus, FileText, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { X, Plus, FileText, Image as ImageIcon, Sparkles, Tag, Check, UserCheck } from 'lucide-react';
+import { DEFAULT_LABELS } from '../data/defaultLabels';
+import { RichTextEditor } from './RichTextEditor';
 
 interface CreateCardModalProps {
   steps: StepDefinition[];
@@ -19,6 +21,7 @@ export const CreateCardModal: React.FC<CreateCardModalProps> = ({
   onCreateCard,
 }) => {
   const clientUsers = allUsers.filter((u) => u.role === 'client');
+  const merchUsers = allUsers.filter((u) => u.role === 'merch' || u.role === 'admin');
 
   if (!canUserCreateOrEditCards(currentUser)) {
     return null;
@@ -30,6 +33,15 @@ export const CreateCardModal: React.FC<CreateCardModalProps> = ({
     if (currentUser.role === 'client') return currentUser.name;
     return clientUsers.length > 0 ? clientUsers[0].name : 'Maison Haute Couture';
   });
+  
+  // Initial 2 merchandisers or active user
+  const [selectedMerchandiserIds, setSelectedMerchandiserIds] = useState<string[]>(() => {
+    if (currentUser.role === 'merch') {
+      const others = merchUsers.filter((u) => u.id !== currentUser.id);
+      return [currentUser.id, ...(others[0] ? [others[0].id] : [])];
+    }
+    return merchUsers.slice(0, 2).map((u) => u.id);
+  });
   const [matiere, setMatiere] = useState('');
   const [prix, setPrix] = useState(250);
   const [quantites, setQuantites] = useState(100);
@@ -39,6 +51,16 @@ export const CreateCardModal: React.FC<CreateCardModalProps> = ({
 
   const [dossierPdf, setDossierPdf] = useState<CardAttachment | null>(null);
   const [framePhoto, setFramePhoto] = useState<CardAttachment | null>(null);
+  const [selectedLabels, setSelectedLabels] = useState<CardLabel[]>([]);
+  const [historiqueNote, setHistoriqueNote] = useState('');
+
+  const toggleLabelSelection = (label: CardLabel) => {
+    if (selectedLabels.some((l) => l.id === label.id)) {
+      setSelectedLabels(selectedLabels.filter((l) => l.id !== label.id));
+    } else {
+      setSelectedLabels([...selectedLabels, label]);
+    }
+  };
 
   const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -120,6 +142,42 @@ export const CreateCardModal: React.FC<CreateCardModalProps> = ({
       });
     }
 
+    // Resolve merchandisers (2 to 4)
+    const selectedMerchUsers = merchUsers.filter((u) => selectedMerchandiserIds.includes(u.id));
+    const cardMerchandisers: CardMerchandiser[] =
+      selectedMerchUsers.length > 0
+        ? selectedMerchUsers.map((u) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            avatar: u.avatar,
+            posteLabel: u.posteLabel || (u.role === 'merch' ? 'Commerciale / Merchandiser' : undefined),
+          }))
+        : [
+            {
+              id: currentUser.id,
+              name: currentUser.name,
+              avatar: currentUser.avatar,
+            },
+          ];
+
+    // Add all merchandisers to initialMembers
+    cardMerchandisers.forEach((m) => {
+      if (!initialMembers.some((mem) => mem.id === m.id)) {
+        initialMembers.push({
+          id: m.id,
+          name: m.name,
+          email: m.email || '',
+          role: 'merch',
+          avatar: m.avatar,
+          addedAt: new Date().toISOString(),
+        });
+      }
+    });
+
+    const primaryMerch = cardMerchandisers[0];
+    const combinedNames = cardMerchandisers.map((m) => m.name).join(', ');
+
     const newCard: Card = {
       id: `card-${Date.now()}`,
       reference: reference.trim(),
@@ -132,12 +190,17 @@ export const CreateCardModal: React.FC<CreateCardModalProps> = ({
       dossierTechnique: dossierPdf,
       frame: framePhoto,
       attachments: [],
+      labels: selectedLabels,
+      merchandiserName: combinedNames,
+      merchandiserId: primaryMerch.id,
+      merchandiserAvatar: primaryMerch.avatar,
+      merchandisers: cardMerchandisers,
       descriptionSpec: {
         modele: modele.trim(),
         matiere: matiere.trim() || 'Textile standard',
         prix: Number(prix),
         quantites: Number(quantites),
-        historiqueNote: 'Carte créée via l\'interface.',
+        historiqueNote: historiqueNote.trim() || 'Carte créée via l\'interface.',
       },
       members: initialMembers,
       stepChecklists: {},
@@ -148,7 +211,7 @@ export const CreateCardModal: React.FC<CreateCardModalProps> = ({
           authorName: currentUser.name,
           authorRole: currentUser.role,
           action: 'Création de la carte',
-          details: `Modèle: ${modele.trim()} (${reference.trim()})`,
+          details: `Modèle: ${modele.trim()} (${reference.trim()}) — Merchs: ${combinedNames}`,
           timestamp: new Date().toLocaleString('fr-FR'),
         },
       ],
@@ -234,6 +297,65 @@ export const CreateCardModal: React.FC<CreateCardModalProps> = ({
             />
           </div>
 
+          <div className="p-3 bg-indigo-50/70 border border-indigo-200/80 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+                Commerciales Responsables (2 à 4 Merchs)
+              </label>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-600 text-white rounded-full">
+                {selectedMerchandiserIds.length} sélectionnée(s)
+              </span>
+            </div>
+            
+            <p className="text-[11px] text-slate-600">
+              Sélectionnez les commerciales chargées du suivi de cette commande (2 à 4 responsables) :
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {merchUsers.map((m) => {
+                const isSelected = selectedMerchandiserIds.includes(m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        if (selectedMerchandiserIds.length > 1) {
+                          setSelectedMerchandiserIds(selectedMerchandiserIds.filter((id) => id !== m.id));
+                        }
+                      } else {
+                        if (selectedMerchandiserIds.length < 4) {
+                          setSelectedMerchandiserIds([...selectedMerchandiserIds, m.id]);
+                        }
+                      }
+                    }}
+                    className={`flex items-center gap-2 p-1.5 rounded-lg text-left border transition-all text-xs ${
+                      isSelected
+                        ? 'bg-indigo-100/90 border-indigo-400 text-indigo-950 font-semibold ring-1 ring-indigo-300'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {}}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 pointer-events-none"
+                    />
+                    {m.avatar ? (
+                      <img src={m.avatar} alt={m.name} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold text-[8px] flex items-center justify-center shrink-0">
+                        {m.name.charAt(0)}
+                      </div>
+                    )}
+                    <span className="truncate">{m.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div>
             <label className="text-xs font-bold text-slate-700 block mb-1">
               Matière / Tissu Principal
@@ -283,6 +405,49 @@ export const CreateCardModal: React.FC<CreateCardModalProps> = ({
                 className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
+          </div>
+
+          {/* Labels Selector */}
+          <div className="pt-1">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-1.5">
+              <Tag className="w-3.5 h-3.5 text-indigo-600" />
+              Étiquettes / Labels
+            </label>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {DEFAULT_LABELS.map((lbl) => {
+                const isSelected = selectedLabels.some((l) => l.id === lbl.id);
+                return (
+                  <button
+                    key={lbl.id}
+                    type="button"
+                    onClick={() => toggleLabelSelection(lbl)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-extrabold transition-all border flex items-center gap-1 ${
+                      isSelected
+                        ? `${lbl.badgeClass} ring-2 ring-indigo-500 scale-105`
+                        : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>{lbl.name}</span>
+                    {isSelected && <Check className="w-3 h-3 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Notes & Description */}
+          <div>
+            <label className="text-xs font-bold text-slate-700 block mb-1">
+              Notes & Spécifications de départ
+            </label>
+            <RichTextEditor
+              value={historiqueNote}
+              onChange={setHistoriqueNote}
+              placeholder="Précisions de confection, directives, mentions (@)..."
+              minRows={2}
+              isDark={false}
+              users={allUsers}
+            />
           </div>
 
           {/* Files Upload Boxes */}

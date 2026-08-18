@@ -1,4 +1,5 @@
 import { StepDefinition, Card, UserProfile } from '../types';
+import { DEFAULT_LABELS } from './defaultLabels';
 
 export const DEFAULT_USERS: UserProfile[] = [
   {
@@ -8,7 +9,7 @@ export const DEFAULT_USERS: UserProfile[] = [
     role: 'merch',
     posteLabel: 'Commerciale / Merchandiser',
     password: '123456',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+    avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Maya&eyebrows=default&eyes=happy&mouth=smile&top=longCurly',
   },
   {
     id: 'usr-2',
@@ -17,7 +18,25 @@ export const DEFAULT_USERS: UserProfile[] = [
     role: 'merch',
     posteLabel: 'Commercial / Merch',
     password: '123456',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Leo&accessories=prescription02&accessoriesProbability=100&clothesColor=65c9ff&clothing=graphicShirt&top=shortFlat',
+  },
+  {
+    id: 'usr-5',
+    name: 'Camille Dupuis',
+    email: 'camille.dupuis@fashionbrand.com',
+    role: 'merch',
+    posteLabel: 'Commerciale Senior / Merch',
+    password: '123456',
+    avatar: 'https://api.dicebear.com/9.x/lorelei/svg?seed=Aiko&eyes=variant02&hair=variant12&head=variant01',
+  },
+  {
+    id: 'usr-6',
+    name: 'Alexandre Martin',
+    email: 'alexandre.martin@fashionbrand.com',
+    role: 'merch',
+    posteLabel: 'Key Account Commercial',
+    password: '123456',
+    avatar: 'https://api.dicebear.com/9.x/adventurer/svg?seed=Ren&hair=short04&glasses=variant02',
   },
   {
     id: 'usr-3',
@@ -26,7 +45,7 @@ export const DEFAULT_USERS: UserProfile[] = [
     role: 'client',
     posteLabel: 'Client / Marque Partner',
     password: '123456',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    avatar: 'https://api.dicebear.com/9.x/notionists/svg?seed=Juliette&gesture=pointing',
   },
   {
     id: 'usr-4',
@@ -35,7 +54,7 @@ export const DEFAULT_USERS: UserProfile[] = [
     role: 'client',
     posteLabel: 'Client / Partenaire Studio',
     password: '123456',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    avatar: 'https://api.dicebear.com/9.x/bottts/svg?seed=Volt&sides=round&top=antenna',
   },
 ];
 
@@ -446,6 +465,30 @@ export const INITIAL_CARDS: Card[] = [
         createdAt: '03/08/2026 à 11:30',
       },
     ],
+    labels: [DEFAULT_LABELS[0], DEFAULT_LABELS[2]],
+    merchandisers: [
+      {
+        id: 'usr-1',
+        name: 'Sophie Bertrand',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+        posteLabel: 'Commerciale / Merchandiser',
+      },
+      {
+        id: 'usr-2',
+        name: 'Lucas Moreau',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        posteLabel: 'Commercial / Merch',
+      },
+      {
+        id: 'usr-5',
+        name: 'Camille Dupuis',
+        avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+        posteLabel: 'Commerciale Senior',
+      },
+    ],
+    merchandiserName: 'Sophie Bertrand',
+    merchandiserId: 'usr-1',
+    merchandiserAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
   },
   {
     id: 'card-102',
@@ -494,6 +537,14 @@ export const INITIAL_CARDS: Card[] = [
         addedAt: '2026-08-02T11:00:00Z',
       },
       {
+        id: 'usr-6',
+        name: 'Alexandre Martin',
+        email: 'alexandre.martin@fashionbrand.com',
+        role: 'merch',
+        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+        addedAt: '2026-08-02T11:05:00Z',
+      },
+      {
         id: 'usr-4',
         name: 'Studio Design Luxe',
         email: 'production@studiodesign.com',
@@ -514,6 +565,24 @@ export const INITIAL_CARDS: Card[] = [
         timestamp: '2026-08-02 à 11:00:00',
       },
     ],
+    labels: [DEFAULT_LABELS[1], DEFAULT_LABELS[3]],
+    merchandisers: [
+      {
+        id: 'usr-2',
+        name: 'Lucas Moreau',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        posteLabel: 'Commercial / Merch',
+      },
+      {
+        id: 'usr-6',
+        name: 'Alexandre Martin',
+        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+        posteLabel: 'Key Account Commercial',
+      },
+    ],
+    merchandiserName: 'Lucas Moreau',
+    merchandiserId: 'usr-2',
+    merchandiserAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
   },
   {
     id: 'card-103',
@@ -561,6 +630,30 @@ export const INITIAL_CARDS: Card[] = [
         avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
         addedAt: '2026-07-20T14:00:00Z',
       },
+      {
+        id: 'usr-5',
+        name: 'Camille Dupuis',
+        email: 'camille.dupuis@fashionbrand.com',
+        role: 'merch',
+        avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+        addedAt: '2026-07-20T14:00:00Z',
+      },
+      {
+        id: 'usr-6',
+        name: 'Alexandre Martin',
+        email: 'alexandre.martin@fashionbrand.com',
+        role: 'merch',
+        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+        addedAt: '2026-07-20T14:00:00Z',
+      },
+      {
+        id: 'usr-2',
+        name: 'Lucas Moreau',
+        email: 'lucas.moreau@ateliercouture.fr',
+        role: 'merch',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        addedAt: '2026-07-20T14:00:00Z',
+      },
     ],
     stepChecklists: {},
     historyLogs: [
@@ -574,5 +667,35 @@ export const INITIAL_CARDS: Card[] = [
         timestamp: '2026-08-08 à 16:40:00',
       },
     ],
+    labels: [DEFAULT_LABELS[6], DEFAULT_LABELS[4]],
+    merchandisers: [
+      {
+        id: 'usr-1',
+        name: 'Sophie Bertrand',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+        posteLabel: 'Commerciale / Merchandiser',
+      },
+      {
+        id: 'usr-5',
+        name: 'Camille Dupuis',
+        avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+        posteLabel: 'Commerciale Senior',
+      },
+      {
+        id: 'usr-6',
+        name: 'Alexandre Martin',
+        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+        posteLabel: 'Key Account Commercial',
+      },
+      {
+        id: 'usr-2',
+        name: 'Lucas Moreau',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        posteLabel: 'Commercial / Merch',
+      },
+    ],
+    merchandiserName: 'Sophie Bertrand',
+    merchandiserId: 'usr-1',
+    merchandiserAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
   },
 ];

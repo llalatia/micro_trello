@@ -8,6 +8,11 @@ export interface UserProfile {
   posteLabel?: string;
   password?: string;
   avatar?: string;
+  initials?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+  brandColor?: string;
 }
 
 export interface ChecklistItem {
@@ -80,6 +85,23 @@ export interface CardComment {
   authorAvatar?: string;
   content: string;
   createdAt: string;
+  isEdited?: boolean;
+}
+
+export interface CardLabel {
+  id: string;
+  name: string;
+  color: string;
+  bgClass: string;
+  badgeClass: string;
+}
+
+export interface CardMerchandiser {
+  id?: string;
+  name: string;
+  avatar?: string;
+  email?: string;
+  posteLabel?: string;
 }
 
 export interface Card {
@@ -100,4 +122,9 @@ export interface Card {
   stepChecklists: Record<string, ChecklistItem[]>; // stepId -> list of items
   historyLogs: HistoryLog[];
   comments?: CardComment[];
+  labels?: CardLabel[];
+  merchandisers?: CardMerchandiser[];
+  merchandiserName?: string;
+  merchandiserId?: string;
+  merchandiserAvatar?: string;
 }

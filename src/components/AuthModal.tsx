@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
-import { LogIn, UserPlus, X, Lock, Mail, User, Briefcase, CheckCircle2, AlertCircle } from 'lucide-react';
+import { AvatarPicker } from './AvatarPicker';
+import { AVATAR_PRESETS } from '../data/avatarPresets';
+import { LogIn, UserPlus, X, Lock, Mail, User, Briefcase, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -42,6 +44,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupRole, setSignupRole] = useState('merch');
+  const [signupAvatar, setSignupAvatar] = useState(AVATAR_PRESETS[0].url);
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
 
@@ -103,7 +106,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       role: signupRole as any,
       posteLabel: roleObj ? roleObj.label : signupRole,
       password: signupPassword,
-      avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80`,
+      avatar: signupAvatar || undefined,
     };
 
     onSignup(newUser);
@@ -328,6 +331,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Avatar Selector in Signup */}
+              <div className="pt-2 border-t border-slate-800">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    Avatar Dessin Animé & Cool
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const randomPresets = AVATAR_PRESETS;
+                      const pick = randomPresets[Math.floor(Math.random() * randomPresets.length)];
+                      setSignupAvatar(pick.url);
+                    }}
+                    className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300"
+                  >
+                    🎲 Aléatoire
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-indigo-500 bg-slate-900 shrink-0 p-0.5">
+                    <img
+                      src={signupAvatar}
+                      alt="Aperçu"
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  </div>
+                  <div className="text-[11px] text-slate-400 leading-tight">
+                    Choisissez votre look D.A / Cartoon parmi la sélection :
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 gap-1.5 max-h-28 overflow-y-auto p-1.5 bg-slate-950 rounded-xl border border-slate-800">
+                  {AVATAR_PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSignupAvatar(p.url)}
+                      className={`relative rounded-full aspect-square p-0.5 overflow-hidden transition-all ${
+                        signupAvatar === p.url
+                          ? 'ring-2 ring-indigo-500 scale-105 bg-indigo-950'
+                          : 'opacity-70 hover:opacity-100 hover:scale-105'
+                      }`}
+                      title={p.name}
+                    >
+                      <img src={p.url} alt={p.name} className="w-full h-full rounded-full object-cover" />
+                    </button>
+                  ))}
                 </div>
               </div>
 

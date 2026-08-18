@@ -4,10 +4,12 @@ import { DEFAULT_STEPS, INITIAL_CARDS, DEFAULT_USERS } from './data/initialData'
 import { Header } from './components/Header';
 import { KanbanBoard } from './components/KanbanBoard';
 import { CardListView } from './components/CardListView';
+import { ClientsView } from './components/ClientsView';
 import { CardIdentityModal } from './components/CardIdentityModal';
 import { StepConfigModal } from './components/StepConfigModal';
 import { CreateCardModal } from './components/CreateCardModal';
 import { AuthModal } from './components/AuthModal';
+import { UserProfileModal } from './components/UserProfileModal';
 import { Layers } from 'lucide-react';
 
 const STORAGE_CARDS_KEY = 'suivi_flux_cards_v2';
@@ -45,7 +47,7 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'clients'>('kanban');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modals state
@@ -53,8 +55,17 @@ export default function App() {
   const [isStepConfigOpen, setIsStepConfigOpen] = useState(false);
   const [isCreateCardOpen, setIsCreateCardOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const activeUser = currentUser || DEFAULT_USERS[0];
+
+  // User Profile Update handler
+  const handleUpdateUser = (updatedUser: UserProfile) => {
+    setAllUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+    if (currentUser?.id === updatedUser.id || (!currentUser && updatedUser.id === DEFAULT_USERS[0].id)) {
+      setCurrentUser(updatedUser);
+    }
+  };
 
   // Sync cards with LocalStorage
   useEffect(() => {
@@ -295,6 +306,7 @@ export default function App() {
         onUserChange={setCurrentUser}
         onLogout={handleLogout}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenProfileModal={() => setIsProfileModalOpen(true)}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         onOpenCreateCard={() => setIsCreateCardOpen(true)}
@@ -312,11 +324,33 @@ export default function App() {
             onCardClick={setSelectedCard}
             onMoveCardStep={handleMoveCardStep}
           />
-        ) : (
+        ) : viewMode === 'list' ? (
           <CardListView
             cards={filteredCards}
             steps={steps}
+            allUsers={allUsers}
             onCardClick={setSelectedCard}
+          />
+        ) : (
+          <ClientsView
+            cards={filteredCards}
+            steps={steps}
+            allUsers={allUsers}
+            currentUser={activeUser}
+            onCardClick={setSelectedCard}
+            onAddClientUser={(newClient) => setAllUsers((prev) => [...prev, newClient])}
+            onUpdateClientUser={(updatedClient) =>
+              setAllUsers((prev) => prev.map((u) => (u.id === updatedClient.id ? updatedClient : u)))
+            }
+            onRenameClientInCards={(oldName, newName) =>
+              setCards((prev) =>
+                prev.map((c) =>
+                  c.clientName.toLowerCase().trim() === oldName.toLowerCase().trim()
+                    ? { ...c, clientName: newName }
+                    : c
+                )
+              )
+            }
           />
         )}
       </main>
@@ -361,6 +395,17 @@ export default function App() {
         onLogin={handleLogin}
         onSignup={handleSignup}
       />
+
+      {/* User Profile & Avatar Modal */}
+      {isProfileModalOpen && (
+        <UserProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          currentUser={activeUser}
+          allUsers={allUsers}
+          onUpdateUser={handleUpdateUser}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
   "name": "Suivi de Flux & Fiches Cartes",
-  "description": "Système de suivi de flux avec étapes configurables, checklists imbriquées, fiches identitaires de cartes (PDF, photos, membres, spécifications) et historique d'audit de modification.",
+  "description": "Système de suivi de flux avec étapes configurables, checklists imbriquées, fiches identitaires de cartes (PDF, photos, membres, spécifications), éditeur de texte riche avec styles, raccourcis, mentions (@), liens, images et emojis, et historique d'audit.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

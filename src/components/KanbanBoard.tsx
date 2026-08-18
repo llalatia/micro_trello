@@ -1,6 +1,8 @@
 import React from 'react';
 import { Card, StepDefinition, UserProfile } from '../types';
 import { canUserCreateOrEditCards } from '../utils/permissions';
+import { getCardMerchandisers } from '../utils/merchandiser';
+import { CardStepSelector } from './CardStepSelector';
 import {
   FileText,
   Image as ImageIcon,
@@ -9,6 +11,7 @@ import {
   ChevronLeft,
   Clock,
   User,
+  UserCheck,
   Paperclip,
   MessageSquare,
 } from 'lucide-react';
@@ -17,6 +20,7 @@ interface KanbanBoardProps {
   cards: Card[];
   steps: StepDefinition[];
   currentUser: UserProfile;
+  allUsers?: UserProfile[];
   onCardClick: (card: Card) => void;
   onMoveCardStep: (cardId: string, targetStepId: string) => void;
 }
@@ -25,6 +29,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   cards,
   steps,
   currentUser,
+  allUsers,
   onCardClick,
   onMoveCardStep,
 }) => {
@@ -84,6 +89,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   const total = items.length;
                   const done = items.filter((i) => i.completed).length;
                   const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+                  const merchs = getCardMerchandisers(card, allUsers);
 
                   // Determine card photo source
                   const photoUrl =
@@ -92,7 +98,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
                   // -------------------------------------------------------------
                   // MODE 1: ULTRA-COMPACT VIEW (>= 5 CARDS)
-                  // Displays only photo and reference number + short model name
+                  // Displays photo, reference, merch in charge, short model name
                   // -------------------------------------------------------------
                   if (isCompact5Plus) {
                     return (
@@ -119,16 +125,60 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                           </span>
                         </div>
 
+                        {/* Card Labels */}
+                        {card.labels && card.labels.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {card.labels.map((lbl) => (
+                              <span
+                                key={lbl.id}
+                                className={`text-[8px] font-extrabold px-1.5 py-0.2 rounded border ${lbl.badgeClass} truncate max-w-[90px]`}
+                                title={lbl.name}
+                              >
+                                {lbl.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Merchandisers in charge (En haut du frame) */}
+                        <div
+                          className="flex items-center gap-1.5 text-[9px] text-slate-800 bg-indigo-50/90 px-1.5 py-0.5 rounded border border-indigo-100/90"
+                          title={merchs.map((m) => m.name).join(', ')}
+                        >
+                          <div className="flex items-center -space-x-1 shrink-0">
+                            {merchs.map((m, idx) =>
+                              m.avatar ? (
+                                <img
+                                  key={m.id || idx}
+                                  src={m.avatar}
+                                  alt={m.name}
+                                  className="w-3.5 h-3.5 rounded-full object-cover border border-white"
+                                />
+                              ) : (
+                                <div
+                                  key={m.id || idx}
+                                  className="w-3.5 h-3.5 rounded-full bg-indigo-600 text-white font-bold text-[7px] flex items-center justify-center border border-white"
+                                >
+                                  {m.name.charAt(0)}
+                                </div>
+                              )
+                            )}
+                          </div>
+                          <span className="font-bold text-slate-800 truncate text-[8.5px]">
+                            {merchs.map((m) => m.name).join(', ')}
+                          </span>
+                        </div>
+
                         {/* Compact Photo */}
-                        <div className="relative rounded-md overflow-hidden bg-slate-950 border border-slate-200 h-16 w-full p-1 flex items-center justify-center">
+                        <div className="relative rounded-md overflow-hidden bg-slate-50 border border-slate-200/80 h-16 w-full flex items-center justify-center p-0.5">
                           {photoUrl ? (
                             <img
                               src={photoUrl}
                               alt={card.modele}
-                              className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300"
+                              className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400 text-[10px] gap-1">
+                            <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400 text-[10px] gap-1">
                               <ImageIcon className="w-3.5 h-3.5" /> Pas de photo
                             </div>
                           )}
@@ -137,30 +187,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         {/* Ultra-compact move controls on hover/always */}
                         {canEdit && (
                           <div
-                            className="flex items-center justify-between pt-0.5 opacity-80 group-hover:opacity-100"
+                            className="pt-0.5 opacity-90 group-hover:opacity-100"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {prevStep ? (
-                              <button
-                                type="button"
-                                onClick={() => onMoveCardStep(card.id, prevStep.id)}
-                                className="p-0.5 text-[10px] text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded flex items-center"
-                                title={`Reculer vers ${prevStep.name}`}
-                              >
-                                <ChevronLeft className="w-3 h-3" />
-                              </button>
-                            ) : <div />}
-
-                            {nextStep && (
-                              <button
-                                type="button"
-                                onClick={() => onMoveCardStep(card.id, nextStep.id)}
-                                className="p-0.5 text-[10px] text-indigo-600 hover:bg-indigo-50 rounded flex items-center ml-auto"
-                                title={`Avancer vers ${nextStep.name}`}
-                              >
-                                <ChevronRight className="w-3 h-3" />
-                              </button>
-                            )}
+                            <CardStepSelector
+                              currentStepId={card.currentStepId}
+                              steps={steps}
+                              onSelectStep={(targetStepId) => onMoveCardStep(card.id, targetStepId)}
+                              size="compact"
+                            />
                           </div>
                         )}
                       </div>
@@ -169,7 +204,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
                   // -------------------------------------------------------------
                   // MODE 2: MEDIUM COMPACT VIEW (3 OR 4 CARDS)
-                  // Displays photo, reference, model, client name & mini checklist
+                  // Compact horizontal photo layout with Merchandiser & client
                   // -------------------------------------------------------------
                   if (isMedium3To4) {
                     return (
@@ -179,70 +214,107 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         onClick={() => onCardClick(card)}
                       >
                         {/* Ref & Client */}
-                        <div className="flex items-center justify-between gap-1.5">
-                          <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                        <div className="flex items-center justify-between gap-1 text-[10px]">
+                          <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 shrink-0">
                             {card.reference}
                           </span>
-                          <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded truncate max-w-[120px]">
+                          <span className="font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded truncate max-w-[130px]">
                             {card.clientName}
                           </span>
                         </div>
 
-                        {/* Model Name */}
-                        <h4 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
-                          {card.modele}
-                        </h4>
-
-                        {/* Photo */}
-                        {photoUrl && (
-                          <div className="rounded-lg overflow-hidden border border-slate-200 h-24 w-full bg-slate-950 p-1 flex items-center justify-center">
-                            <img
-                              src={photoUrl}
-                              alt={card.modele}
-                              className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300"
-                            />
+                        {/* Card Labels */}
+                        {card.labels && card.labels.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {card.labels.map((lbl) => (
+                              <span
+                                key={lbl.id}
+                                className={`text-[8.5px] font-extrabold px-1.5 py-0.2 rounded border ${lbl.badgeClass}`}
+                              >
+                                {lbl.name}
+                              </span>
+                            ))}
                           </div>
                         )}
 
-                        {/* Checklist progress mini */}
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
-                          <span className="flex items-center gap-1 font-medium">
-                            <CheckSquare className="w-3 h-3 text-emerald-600" /> {done}/{total}
+                        {/* Responsables (En haut du frame) */}
+                        <div
+                          className="flex items-center gap-1.5 text-[9.5px] text-slate-800 bg-indigo-50/90 border border-indigo-100 px-2 py-1 rounded-lg shadow-2xs"
+                          title={merchs.map((m) => m.name).join(', ')}
+                        >
+                          <div className="flex items-center -space-x-1 shrink-0">
+                            {merchs.map((m, idx) =>
+                              m.avatar ? (
+                                <img
+                                  key={m.id || idx}
+                                  src={m.avatar}
+                                  alt={m.name}
+                                  className="w-4 h-4 rounded-full object-cover border border-white ring-1 ring-indigo-200"
+                                />
+                              ) : (
+                                <div
+                                  key={m.id || idx}
+                                  className="w-4 h-4 rounded-full bg-indigo-600 text-white font-bold text-[8px] flex items-center justify-center border border-white"
+                                >
+                                  {m.name.charAt(0)}
+                                </div>
+                              )
+                            )}
+                          </div>
+                          <span className="font-bold text-slate-800 truncate text-[9px]">
+                            {merchs.map((m) => m.name).join(', ')}
                           </span>
-                          {currentUser.role !== 'client' && card.comments && card.comments.length > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200" title={`${card.comments.length} message(s)`}>
-                              <MessageSquare className="w-3 h-3 text-indigo-600" />
-                              {card.comments.length}
-                            </span>
+                        </div>
+
+                        {/* Photo (Left) + Model Name & Progress (Right) */}
+                        <div className="flex items-center gap-2">
+                          {photoUrl ? (
+                            <div className="rounded-lg overflow-hidden border border-slate-200/80 w-16 h-16 shrink-0 bg-slate-50 p-0.5 flex items-center justify-center">
+                              <img
+                                src={photoUrl}
+                                alt={card.modele}
+                                className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
+                              />
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-slate-200/80 w-16 h-16 shrink-0 bg-slate-100 text-slate-400 flex flex-col items-center justify-center text-[9px] gap-0.5">
+                              <ImageIcon className="w-3.5 h-3.5" />
+                              <span>Sans photo</span>
+                            </div>
                           )}
-                          <span className="font-bold text-slate-600">{percent}%</span>
+
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <h4 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-tight" title={card.modele}>
+                              {card.modele}
+                            </h4>
+
+                            <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                              <span className="flex items-center gap-0.5 font-medium text-slate-600">
+                                <CheckSquare className="w-3 h-3 text-emerald-600 shrink-0" /> {done}/{total} ({percent}%)
+                              </span>
+
+                              {currentUser.role !== 'client' && card.comments && card.comments.length > 0 && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200 shrink-0" title={`${card.comments.length} message(s)`}>
+                                  <MessageSquare className="w-2.5 h-2.5 text-indigo-600" />
+                                  {card.comments.length}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
                         {/* Move controls */}
                         {canEdit && (
                           <div
-                            className="flex items-center justify-between pt-1 border-t border-slate-100"
+                            className="pt-1 border-t border-slate-100"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {prevStep ? (
-                              <button
-                                type="button"
-                                onClick={() => onMoveCardStep(card.id, prevStep.id)}
-                                className="px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded flex items-center gap-0.5"
-                              >
-                                <ChevronLeft className="w-3 h-3" /> {prevStep.name}
-                              </button>
-                            ) : <div />}
-
-                            {nextStep && (
-                              <button
-                                type="button"
-                                onClick={() => onMoveCardStep(card.id, nextStep.id)}
-                                className="px-1.5 py-0.5 text-[10px] font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded flex items-center gap-0.5 ml-auto"
-                              >
-                                {nextStep.name} <ChevronRight className="w-3 h-3" />
-                              </button>
-                            )}
+                            <CardStepSelector
+                              currentStepId={card.currentStepId}
+                              steps={steps}
+                              onSelectStep={(targetStepId) => onMoveCardStep(card.id, targetStepId)}
+                              size="medium"
+                            />
                           </div>
                         )}
                       </div>
@@ -275,13 +347,58 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         {card.modele}
                       </h4>
 
+                      {/* Card Labels */}
+                      {card.labels && card.labels.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {card.labels.map((lbl) => (
+                            <span
+                              key={lbl.id}
+                              className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-full border ${lbl.badgeClass}`}
+                            >
+                              {lbl.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Responsables (EN HAUT DU FRAME PHOTO) */}
+                      <div
+                        className="flex items-center gap-2 p-1.5 bg-gradient-to-r from-indigo-50/90 to-slate-50 rounded-lg border border-indigo-200/80 text-[10.5px] shadow-2xs"
+                        title={merchs.map((m) => m.name).join(', ')}
+                      >
+                        <div className="flex items-center -space-x-1.5 shrink-0">
+                          {merchs.map((m, idx) =>
+                            m.avatar ? (
+                              <img
+                                key={m.id || idx}
+                                src={m.avatar}
+                                alt={m.name}
+                                className="w-5 h-5 rounded-full object-cover border-2 border-white ring-1 ring-indigo-200"
+                              />
+                            ) : (
+                              <div
+                                key={m.id || idx}
+                                className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold text-[8.5px] flex items-center justify-center border-2 border-white ring-1 ring-indigo-200 shrink-0"
+                              >
+                                {m.name.substring(0, 1).toUpperCase()}
+                              </div>
+                            )
+                          )}
+                        </div>
+                        <span
+                          className="font-bold text-slate-800 text-[10.5px] truncate"
+                        >
+                          {merchs.map((m) => m.name).join(', ')}
+                        </span>
+                      </div>
+
                       {/* Frame / Photo Thumbnail */}
                       {photoUrl && (
-                        <div className="rounded-lg overflow-hidden border border-slate-200 h-36 w-full bg-slate-950 p-1 flex items-center justify-center">
+                        <div className="rounded-lg overflow-hidden border border-slate-200/80 h-36 w-full bg-slate-50 p-1 flex items-center justify-center relative">
                           <img
                             src={photoUrl}
                             alt={card.modele}
-                            className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300"
+                            className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
                           />
                         </div>
                       )}
@@ -333,30 +450,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                       {/* Move buttons footer */}
                       {canEdit && (
                         <div
-                          className="flex items-center justify-between pt-1 border-t border-slate-100 opacity-90 group-hover:opacity-100"
+                          className="pt-1.5 border-t border-slate-100 opacity-90 group-hover:opacity-100"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {prevStep ? (
-                            <button
-                              type="button"
-                              onClick={() => onMoveCardStep(card.id, prevStep.id)}
-                              className="px-2 py-1 text-[10px] font-bold text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded flex items-center gap-0.5"
-                              title={`Reculer vers ${prevStep.name}`}
-                            >
-                              <ChevronLeft className="w-3 h-3" /> {prevStep.name}
-                            </button>
-                          ) : <div />}
-
-                          {nextStep && (
-                            <button
-                              type="button"
-                              onClick={() => onMoveCardStep(card.id, nextStep.id)}
-                              className="px-2 py-1 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-2xs flex items-center gap-0.5 ml-auto"
-                              title={`Avancer vers ${nextStep.name}`}
-                            >
-                              {nextStep.name} <ChevronRight className="w-3 h-3" />
-                            </button>
-                          )}
+                          <CardStepSelector
+                            currentStepId={card.currentStepId}
+                            steps={steps}
+                            onSelectStep={(targetStepId) => onMoveCardStep(card.id, targetStepId)}
+                            size="full"
+                          />
                         </div>
                       )}
                     </div>

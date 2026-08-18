@@ -1,14 +1,16 @@
 import React from 'react';
-import { Card, StepDefinition } from '../types';
-import { FileText, Image as ImageIcon, Eye, CheckSquare, Calendar, ChevronRight, MessageSquare } from 'lucide-react';
+import { Card, StepDefinition, UserProfile } from '../types';
+import { FileText, Image as ImageIcon, Eye, CheckSquare, Calendar, ChevronRight, MessageSquare, UserCheck } from 'lucide-react';
+import { getCardMerchandiser } from '../utils/merchandiser';
 
 interface CardListViewProps {
   cards: Card[];
   steps: StepDefinition[];
+  allUsers?: UserProfile[];
   onCardClick: (card: Card) => void;
 }
 
-export const CardListView: React.FC<CardListViewProps> = ({ cards, steps, onCardClick }) => {
+export const CardListView: React.FC<CardListViewProps> = ({ cards, steps, allUsers = [], onCardClick }) => {
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
@@ -18,6 +20,7 @@ export const CardListView: React.FC<CardListViewProps> = ({ cards, steps, onCard
               <tr>
                 <th className="py-3.5 px-4">Référence</th>
                 <th className="py-3.5 px-4">Modèle</th>
+                <th className="py-3.5 px-4">Commercial(e)</th>
                 <th className="py-3.5 px-4">Client</th>
                 <th className="py-3.5 px-4">Étape Actuelle</th>
                 <th className="py-3.5 px-4">Dossier Tech (PDF)</th>
@@ -30,7 +33,7 @@ export const CardListView: React.FC<CardListViewProps> = ({ cards, steps, onCard
             <tbody className="divide-y divide-slate-100 font-medium">
               {cards.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-slate-400 italic">
+                  <td colSpan={10} className="text-center py-12 text-slate-400 italic">
                     Aucune carte ne correspond à la recherche.
                   </td>
                 </tr>
@@ -39,6 +42,7 @@ export const CardListView: React.FC<CardListViewProps> = ({ cards, steps, onCard
                   const currentStep = steps.find((s) => s.id === card.currentStepId) || steps[0];
                   const items = card.stepChecklists[currentStep.id] || currentStep.defaultChecklists;
                   const done = items.filter((i) => i.completed).length;
+                  const merch = getCardMerchandiser(card, allUsers);
 
                   return (
                     <tr
@@ -62,8 +66,36 @@ export const CardListView: React.FC<CardListViewProps> = ({ cards, steps, onCard
                         {card.modele}
                       </td>
 
-                      <td className="py-3 px-4 text-slate-600 font-medium whitespace-nowrap">
-                        {card.clientName}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-slate-800">
+                          {merch.avatar ? (
+                            <img src={merch.avatar} alt={merch.name} className="w-5 h-5 rounded-full object-cover border border-indigo-200" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold text-[9px] flex items-center justify-center">
+                              {merch.name.charAt(0)}
+                            </div>
+                          )}
+                          <span className="font-semibold text-slate-700">{merch.name}</span>
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4 text-slate-700 font-medium whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <div
+                            style={{ borderRadius: '10%' }}
+                            className="w-5 h-5 bg-indigo-600 text-white font-black text-[9px] flex items-center justify-center shrink-0"
+                          >
+                            {card.clientName
+                              .replace(/\(client\)/gi, '')
+                              .trim()
+                              .split(/\s+/)
+                              .map((w) => w[0])
+                              .join('')
+                              .substring(0, 2)
+                              .toUpperCase()}
+                          </div>
+                          <span className="font-semibold">{card.clientName}</span>
+                        </div>
                       </td>
 
                       <td className="py-3 px-4 whitespace-nowrap">
@@ -84,8 +116,8 @@ export const CardListView: React.FC<CardListViewProps> = ({ cards, steps, onCard
 
                       <td className="py-3 px-4 whitespace-nowrap">
                         {card.frame ? (
-                          <div className="w-10 h-7 rounded overflow-hidden border border-slate-300 bg-slate-900">
-                            <img src={card.frame.fileUrl} alt="frame" className="w-full h-full object-cover" />
+                          <div className="w-10 h-8 rounded overflow-hidden border border-slate-200 bg-slate-50 p-0.5 flex items-center justify-center">
+                            <img src={card.frame.fileUrl} alt="frame" className="w-full h-full object-contain" />
                           </div>
                         ) : (
                           <span className="text-slate-400 italic">—</span>

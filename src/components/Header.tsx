@@ -5,6 +5,7 @@ import {
   Layers,
   LayoutGrid,
   List,
+  Building2,
   Plus,
   Search,
   Shield,
@@ -16,13 +17,14 @@ import {
 } from 'lucide-react';
 
 interface HeaderProps {
-  viewMode: 'kanban' | 'list';
-  onViewModeChange: (mode: 'kanban' | 'list') => void;
+  viewMode: 'kanban' | 'list' | 'clients';
+  onViewModeChange: (mode: 'kanban' | 'list' | 'clients') => void;
   currentUser: UserProfile | null;
   allUsers: UserProfile[];
   onUserChange: (user: UserProfile) => void;
   onLogout: () => void;
   onOpenAuthModal: () => void;
+  onOpenProfileModal: () => void;
   searchTerm: string;
   onSearchChange: (term: string) => void;
   onOpenCreateCard: () => void;
@@ -38,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   onUserChange,
   onLogout,
   onOpenAuthModal,
+  onOpenProfileModal,
   searchTerm,
   onSearchChange,
   onOpenCreateCard,
@@ -71,34 +74,44 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Right side controls: Current User, Switcher, Logout & Action Buttons */}
         <div className="flex items-center gap-2.5 flex-wrap justify-between md:justify-end">
           {currentUser ? (
-            <div className="flex items-center gap-2 bg-slate-800/90 p-1.5 pl-2.5 rounded-xl border border-slate-700/80 shadow-xs">
-              {/* User Identity Info */}
-              <div className="flex items-center gap-2">
-                {currentUser.avatar ? (
-                  <img
-                    src={currentUser.avatar}
-                    alt={currentUser.name}
-                    className="w-7 h-7 rounded-full object-cover ring-1 ring-indigo-500/50"
-                  />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs">
-                    {currentUser.name.substring(0, 1).toUpperCase()}
-                  </div>
-                )}
+            <div className="flex items-center gap-1.5 bg-slate-800/90 p-1.5 pl-2 rounded-xl border border-slate-700/80 shadow-xs">
+              {/* User Identity Info - Clickable to edit profile & avatar */}
+              <button
+                type="button"
+                onClick={onOpenProfileModal}
+                className="flex items-center gap-2 hover:bg-slate-700/60 p-1 rounded-lg transition-colors group text-left"
+                title="Modifier mon profil et ma photo d'avatar"
+              >
+                <div className="relative">
+                  {currentUser.avatar ? (
+                    <img
+                      src={currentUser.avatar}
+                      alt={currentUser.name}
+                      className="w-8 h-8 rounded-full object-cover ring-2 ring-indigo-500/50 group-hover:ring-indigo-400 transition-all"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs ring-2 ring-indigo-500/50">
+                      {currentUser.name.substring(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-indigo-500 rounded-full flex items-center justify-center text-white border border-slate-900 shadow-xs">
+                    <Settings className="w-2 h-2" />
+                  </span>
+                </div>
                 <div className="text-left hidden sm:block">
-                  <p className="text-xs font-bold text-white leading-tight truncate max-w-[130px]">
+                  <p className="text-xs font-bold text-white leading-tight truncate max-w-[130px] group-hover:text-indigo-200 transition-colors">
                     {currentUser.name}
                   </p>
                   <p className="text-[10px] text-indigo-300 font-medium capitalize truncate">
                     {currentUser.posteLabel || currentUser.role}
                   </p>
                 </div>
-              </div>
+              </button>
 
               {/* Explicit Logout Button */}
               <button
                 onClick={onLogout}
-                className="px-2.5 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold rounded-lg border border-red-500/30 flex items-center gap-1 transition-colors ml-1"
+                className="px-2.5 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold rounded-lg border border-red-500/30 flex items-center gap-1 transition-colors ml-0.5"
                 title="Se déconnecter de votre compte"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -166,6 +179,18 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <List className="w-3.5 h-3.5" />
               Tableau Liste
+            </button>
+
+            <button
+              onClick={() => onViewModeChange('clients')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-colors ${
+                viewMode === 'clients'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              Clients
             </button>
           </div>
 

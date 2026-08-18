@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import { InteractiveCommentsSection } from './InteractiveCommentsSection';
+import { RichTextEditor } from './RichTextEditor';
+import { FormattedText } from './FormattedText';
 import {
   Card,
   StepDefinition,
@@ -8,8 +11,11 @@ import {
   CardMember,
   ChecklistItem,
   CardComment,
+  CardLabel,
+  CardMerchandiser,
 } from '../types';
 import { canUserCreateOrEditCards } from '../utils/permissions';
+import { getCardMerchandisers } from '../utils/merchandiser';
 import {
   X,
   FileText,
@@ -32,10 +38,14 @@ import {
   CheckCircle2,
   MessageSquare,
   Send,
+  Tag,
+  UserCheck,
 } from 'lucide-react';
 import { StepChecklistTree } from './StepChecklistTree';
 import { HistoryLogTable } from './HistoryLogTable';
 import { FileViewerModal } from './FileViewerModal';
+import { LabelSelectorPopover } from './LabelSelectorPopover';
+import { DEFAULT_LABELS } from '../data/defaultLabels';
 
 interface CardIdentityModalProps {
   card: Card;
@@ -54,7 +64,7 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
   onClose,
   onUpdateCard,
 }) => {
-  const [activeTab, setActiveTab] = useState<'identity' | 'checklists' | 'members' | 'attachments' | 'history'>('identity');
+  const [activeTab, setActiveTab] = useState<'identity' | 'checklists' | 'attachments' | 'members' | 'history'>('identity');
   const [viewingAttachment, setViewingAttachment] = useState<CardAttachment | null>(null);
 
   const isClient = currentUser.role === 'client';
@@ -69,57 +79,105 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
   const [historiqueNote, setHistoriqueNote] = useState(card.descriptionSpec.historiqueNote || '');
   const [dateLivraison, setDateLivraison] = useState(card.dateLivraison.slice(0, 10));
 
+  // Merchandiser / Commercial(e) en charge state (Multi-merchandisers support)
+  const initialMerchs = getCardMerchandisers(card, allUsers);
+  const [selectedMerchandiserIds, setSelectedMerchandiserIds] = useState<string[]>(
+    initialMerchs.map((m) => m.id).filter(Boolean) as string[]
+  );
+  const [merchandiserName, setMerchandiserName] = useState(
+    initialMerchs.map((m) => m.name).join(', ')
+  );
+  const [merchandiserId, setMerchandiserId] = useState(initialMerchs[0]?.id || '');
+
   // Member selection state
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedMemberRole, setSelectedMemberRole] = useState<UserRole>('merch');
 
   // Selected step checklist tab view inside card modal
   const [selectedStepIdForChecklists, setSelectedStepIdForChecklists] = useState(card.currentStepId);
-  const [newComment, setNewComment] = useState('');
+
+  // Labels popover state
+  const [isLabelPopoverOpen, setIsLabelPopoverOpen] = useState(false);
+  const [availableLabels, setAvailableLabels] = useState<CardLabel[]>(DEFAULT_LABELS);
 
   const canEdit = canUserCreateOrEditCards(currentUser);
 
-  const handleAddComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newComment.trim() || isClient) return;
-
-    const commentObj: CardComment = {
-      id: `cmt-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      cardId: card.id,
-      authorId: currentUser.id,
-      authorName: currentUser.name,
-      authorRole: currentUser.role,
-      authorPoste: currentUser.posteLabel || (currentUser.role === 'merch' ? 'Commercial / Merch' : 'Admin / Direction'),
-      authorAvatar: currentUser.avatar,
-      content: newComment.trim(),
-      createdAt: new Date().toLocaleString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    };
-
-    const updatedLogs = logAction('Nouveau commentaire / Message', newComment.trim());
-    const currentComments = card.comments || [];
-
-    onUpdateCard({
-      ...card,
-      comments: [commentObj, ...currentComments],
-      historyLogs: updatedLogs,
-    });
-    setNewComment('');
+  // Parse various date strings safely into a Date object
+  const parseTimestampToDate = (ts: string): Date => {
+    if (!ts) return new Date(0);
+    if (ts.includes('T')) {
+      const d = new Date(ts);
+      if (!isNaN(d.getTime())) return d;
+    }
+    // Handles "DD/MM/YYYY à HH:mm:ss" or "DD/MM/YYYY à HH:mm"
+    const match = ts.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+à\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (match) {
+      const [, day, month, year, hours = '0', minutes = '0', seconds = '0'] = match;
+      return new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes), Number(seconds));
+    }
+    const isoMatch = ts.match(/(\d{4})-(\d{2})-(\d{2})(?:\s+à\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (isoMatch) {
+      const [, year, month, day, hours = '0', minutes = '0', seconds = '0'] = isoMatch;
+      return new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes), Number(seconds));
+    }
+    const parsed = new Date(ts);
+    return isNaN(parsed.getTime()) ? new Date(0) : parsed;
   };
 
-  const handleDeleteComment = (commentId: string) => {
-    if (isClient) return;
-    const currentComments = card.comments || [];
-    const updatedComments = currentComments.filter((c) => c.id !== commentId);
+  // Generate dynamic human-readable relative timestamp
+  const getDynamicTimestampLabel = (rawTs: string): string => {
+    const dateObj = parseTimestampToDate(rawTs);
+    if (dateObj.getTime() === 0) return rawTs;
+
+    const now = new Date();
+    const diffMs = now.getTime() - dateObj.getTime();
+
+    if (diffMs < 0 || diffMs < 30 * 1000) {
+      return "À l'instant";
+    }
+
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    if (diffMinutes < 60) {
+      return `Il y a ${diffMinutes} min`;
+    }
+
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) {
+      return `Il y a ${diffHours} h`;
+    }
+
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) {
+      return `Il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
+    }
+
+    return dateObj.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // Toggle label handler
+  const handleToggleLabel = (targetLabel: CardLabel) => {
+    const currentLabels = card.labels || [];
+    const exists = currentLabels.some((l) => l.id === targetLabel.id);
+    const newLabels = exists
+      ? currentLabels.filter((l) => l.id !== targetLabel.id)
+      : [...currentLabels, targetLabel];
+
+    const actionName = exists
+      ? `Retrait étiquette: "${targetLabel.name}"`
+      : `Ajout étiquette: "${targetLabel.name}"`;
+
+    const updatedLogs = logAction('Étiquettes / Labels', actionName);
 
     onUpdateCard({
       ...card,
-      comments: updatedComments,
+      labels: newLabels,
+      historyLogs: updatedLogs,
     });
   };
 
@@ -175,9 +233,52 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
     e.preventDefault();
     if (!canEdit) return;
 
+    // Build the list of merchandisers from selected IDs or fallback
+    const selectedMerchUsers = allUsers.filter((u) => selectedMerchandiserIds.includes(u.id));
+    const newMerchandisersList: CardMerchandiser[] =
+      selectedMerchUsers.length > 0
+        ? selectedMerchUsers.map((u) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            avatar: u.avatar,
+            posteLabel: u.posteLabel || (u.role === 'merch' ? 'Commerciale / Merchandiser' : undefined),
+          }))
+        : [
+            {
+              id: merchandiserId || 'merch-default',
+              name: merchandiserName || 'Équipe Commerciale',
+              avatar: allUsers.find((u) => u.id === merchandiserId)?.avatar || card.merchandiserAvatar,
+            },
+          ];
+
+    const primaryMerch = newMerchandisersList[0];
+    const combinedNames = newMerchandisersList.map((m) => m.name).join(', ');
+
+    // Ensure all merchandisers are synced in members list
+    let updatedMembers = [...card.members];
+    newMerchandisersList.forEach((merch) => {
+      const existingIndex = updatedMembers.findIndex(
+        (m) => (merch.id && m.id === merch.id) || m.name.toLowerCase() === merch.name.toLowerCase()
+      );
+      const newMerchMember: CardMember = {
+        id: merch.id || `member-${Date.now()}`,
+        name: merch.name,
+        email: merch.email || '',
+        role: 'merch',
+        avatar: merch.avatar,
+        addedAt: new Date().toISOString(),
+      };
+      if (existingIndex >= 0) {
+        updatedMembers[existingIndex] = { ...updatedMembers[existingIndex], role: 'merch' };
+      } else {
+        updatedMembers.push(newMerchMember);
+      }
+    });
+
     const updatedLogs = logAction(
       'Mise à jour Fiche Identitaire',
-      `Spécifications modifiées: Modèle=${modele}, Matière=${matiere}, Prix=${prix}€, Qté=${quantites}`
+      `Spécifications modifiées: Modèle=${modele}, Commerciales=${combinedNames}, Matière=${matiere}, Prix=${prix}€, Qté=${quantites}`
     );
 
     const updatedCard: Card = {
@@ -193,6 +294,11 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
         quantites: Number(quantites),
         historiqueNote,
       },
+      merchandiserName: combinedNames,
+      merchandiserId: primaryMerch?.id || merchandiserId,
+      merchandiserAvatar: primaryMerch?.avatar || card.merchandiserAvatar,
+      merchandisers: newMerchandisersList,
+      members: updatedMembers,
       historyLogs: updatedLogs,
     };
 
@@ -337,100 +443,169 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 flex items-center justify-center p-2 sm:p-5 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
-        <div className={`bg-white rounded-2xl shadow-2xl w-full max-h-[92vh] flex flex-col lg:flex-row border border-slate-200 overflow-hidden my-auto ${!isClient ? 'max-w-6xl xl:max-w-7xl' : 'max-w-5xl'}`}>
-          
-          {/* LEFT COLUMN: CARD DETAILS & SPECIFICATIONS */}
-          <div className="flex-1 flex flex-col min-w-0 max-h-[92vh] overflow-hidden bg-white">
-            {/* Top Identity Header Banner */}
-            <div className="bg-slate-900 text-white p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 shrink-0">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <span className="bg-indigo-500/20 text-indigo-300 font-mono text-xs font-bold px-2.5 py-1 rounded-md border border-indigo-400/30">
-                    {card.reference}
-                  </span>
+      <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden my-auto">
+          {/* Top Identity Header Banner */}
+          <div className="bg-slate-900 text-white p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 shrink-0">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="bg-indigo-500/20 text-indigo-300 font-mono text-xs font-bold px-2.5 py-1 rounded-md border border-indigo-400/30">
+                  {card.reference}
+                </span>
 
-                  <span className={`text-xs px-2.5 py-1 rounded-md font-semibold border ${currentStep.color}`}>
-                    Étape: {currentStep.name}
-                  </span>
+                <span className={`text-xs px-2.5 py-1 rounded-md font-semibold border ${currentStep.color}`}>
+                  Étape: {currentStep.name}
+                </span>
 
-                  <span className="text-xs text-slate-300 bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700 flex items-center gap-1">
-                    <UserPlus className="w-3 h-3 text-slate-400" />
-                    Client: <strong className="text-white">{card.clientName}</strong>
-                  </span>
+                <span className="text-xs text-slate-300 bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700 flex items-center gap-1">
+                  <UserPlus className="w-3 h-3 text-slate-400" />
+                  Client: <strong className="text-white">{card.clientName}</strong>
+                </span>
+
+                {/* Multiple Merchandisers Banner in modal header */}
+                <div className="text-xs text-slate-300 bg-slate-800/95 px-2.5 py-1 rounded-md border border-slate-700 flex items-center gap-2">
+                  <UserCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  <span className="text-slate-400">Commerciale(s):</span>
+                  <div className="flex items-center -space-x-1.5 shrink-0">
+                    {initialMerchs.map((m, idx) =>
+                      m.avatar ? (
+                        <img
+                          key={m.id || idx}
+                          src={m.avatar}
+                          alt={m.name}
+                          className="w-4 h-4 rounded-full object-cover border border-slate-900"
+                        />
+                      ) : (
+                        <div
+                          key={m.id || idx}
+                          className="w-4 h-4 rounded-full bg-indigo-600 text-white font-bold text-[7.5px] flex items-center justify-center border border-slate-900"
+                        >
+                          {m.name.charAt(0)}
+                        </div>
+                      )
+                    )}
+                  </div>
+                  <strong className="text-white truncate max-w-[200px]">
+                    {initialMerchs.map((m) => m.name.split(' ')[0]).join(', ')}
+                  </strong>
                 </div>
-
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                  {card.modele}
-                </h2>
               </div>
 
-              <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                {/* Quick Step Changer dropdown */}
-                {canEdit && (
-                  <div className="flex items-center gap-1.5 bg-slate-800 p-1.5 rounded-lg border border-slate-700">
-                    <Layers className="w-4 h-4 text-indigo-400 ml-1" />
-                    <select
-                      value={card.currentStepId}
-                      onChange={(e) => handleStepChange(e.target.value)}
-                      className="bg-slate-900 text-white text-xs font-semibold px-2 py-1 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                    >
-                      {steps.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          Step {s.order}: {s.name}
-                        </option>
-                      ))}
-                    </select>
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                {card.modele}
+              </h2>
+
+              {/* Trello-like Labels bar */}
+              <div className="flex items-center gap-2 flex-wrap pt-1">
+                {card.labels && card.labels.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {card.labels.map((lbl) => (
+                      <span
+                        key={lbl.id}
+                        className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs border ${lbl.badgeClass}`}
+                      >
+                        {lbl.name}
+                      </span>
+                    ))}
                   </div>
                 )}
 
-                <button
-                  onClick={onClose}
-                  className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-                  title="Fermer"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+                {canEdit && (
+                  <div className="relative inline-block">
+                    <button
+                      type="button"
+                      onClick={() => setIsLabelPopoverOpen((prev) => !prev)}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <Tag className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Étiquettes</span>
+                      {card.labels && card.labels.length > 0 && (
+                        <span className="bg-indigo-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ml-0.5">
+                          {card.labels.length}
+                        </span>
+                      )}
+                    </button>
+
+                    {isLabelPopoverOpen && (
+                      <LabelSelectorPopover
+                        cardLabels={card.labels || []}
+                        onToggleLabel={handleToggleLabel}
+                        onClose={() => setIsLabelPopoverOpen(false)}
+                        availableLabels={availableLabels}
+                        onUpdateAvailableLabels={setAvailableLabels}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Navigation Tabs */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1.5 border-b border-slate-200 overflow-x-auto shrink-0 scrollbar-none">
-              <button
-                onClick={() => setActiveTab('identity')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                  activeTab === 'identity'
-                    ? 'bg-white text-slate-900 shadow-2xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                <Info className="w-4 h-4 text-indigo-600" />
-                Fiche Identitaire & Spécifications
-              </button>
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+              {/* Quick Step Changer dropdown */}
+              {canEdit && (
+                <div className="flex items-center gap-1.5 bg-slate-800 p-1.5 rounded-lg border border-slate-700">
+                  <Layers className="w-4 h-4 text-indigo-400 ml-1" />
+                  <select
+                    value={card.currentStepId}
+                    onChange={(e) => handleStepChange(e.target.value)}
+                    className="bg-slate-900 text-white text-xs font-semibold px-2 py-1 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  >
+                    {steps.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        Step {s.order}: {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <button
-                onClick={() => setActiveTab('checklists')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                  activeTab === 'checklists'
-                    ? 'bg-white text-slate-900 shadow-2xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
+                onClick={onClose}
+                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                title="Fermer"
               >
-                <CheckSquare className="w-4 h-4 text-emerald-600" />
-                Checklists par Étape
+                <X className="w-6 h-6" />
               </button>
+            </div>
+          </div>
 
-              <button
-                onClick={() => setActiveTab('attachments')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                  activeTab === 'attachments'
-                    ? 'bg-white text-slate-900 shadow-2xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                <Paperclip className="w-4 h-4 text-amber-600" />
-                Dossier Tech & Médias ({ (card.dossierTechnique ? 1 : 0) + (card.frame ? 1 : 0) + card.attachments.length })
-              </button>
+          {/* Navigation Tabs */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1.5 border-b border-slate-200 overflow-x-auto shrink-0 scrollbar-none">
+            <button
+              onClick={() => setActiveTab('identity')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                activeTab === 'identity'
+                  ? 'bg-white text-slate-900 shadow-2xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <Info className="w-4 h-4 text-indigo-600" />
+              Fiche Identitaire & Spécifications
+            </button>
+
+            <button
+              onClick={() => setActiveTab('checklists')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                activeTab === 'checklists'
+                  ? 'bg-white text-slate-900 shadow-2xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <CheckSquare className="w-4 h-4 text-emerald-600" />
+              Checklists par Étape
+            </button>
+
+            <button
+              onClick={() => setActiveTab('attachments')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                activeTab === 'attachments'
+                  ? 'bg-white text-slate-900 shadow-2xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <Paperclip className="w-4 h-4 text-amber-600" />
+              Dossier Tech & Médias ({ (card.dossierTechnique ? 1 : 0) + (card.frame ? 1 : 0) + card.attachments.length })
+            </button>
 
             <button
               onClick={() => setActiveTab('members')}
@@ -461,10 +636,104 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
           <div className="flex-1 p-5 sm:p-6 overflow-y-auto bg-slate-50/40">
             {/* TAB 1: IDENTITY & SPECIFICATIONS */}
             {activeTab === 'identity' && (
-              <form onSubmit={handleSaveSpecs} className="space-y-6">
+              <div className="space-y-6">
+                <form onSubmit={handleSaveSpecs} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Left Column: Frame/Photo + Dossier Technique Quick Card */}
+                  {/* Left Column: Merchandisers + Frame/Photo + Dossier Technique Quick Card */}
                   <div className="space-y-4">
+                    {/* Commercial(e)s / Merchandisers Responsables (2 à 4 Merchs) */}
+                    <div className="bg-white p-4 rounded-xl border border-indigo-200 shadow-2xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <UserCheck className="w-4 h-4 text-indigo-600" />
+                          Commercial(e)s Responsables (2 à 4 Merchs)
+                        </label>
+                        <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-600 text-white rounded-full">
+                          {selectedMerchandiserIds.length} sélectionnée(s)
+                        </span>
+                      </div>
+
+                      {canEdit ? (
+                        <div className="space-y-2">
+                          <p className="text-[11px] text-slate-600">
+                            Cochez les commerciales en charge de ce modèle (2 à 4 responsables recommandées) :
+                          </p>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {allUsers
+                              .filter((u) => u.role === 'merch' || u.role === 'admin')
+                              .map((u) => {
+                                const isSelected = selectedMerchandiserIds.includes(u.id);
+                                return (
+                                  <button
+                                    key={u.id}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        if (selectedMerchandiserIds.length > 1) {
+                                          setSelectedMerchandiserIds(selectedMerchandiserIds.filter((id) => id !== u.id));
+                                        }
+                                      } else {
+                                        if (selectedMerchandiserIds.length < 4) {
+                                          setSelectedMerchandiserIds([...selectedMerchandiserIds, u.id]);
+                                        }
+                                      }
+                                    }}
+                                    className={`flex items-center gap-2.5 p-2 rounded-lg text-left border transition-all ${
+                                      isSelected
+                                        ? 'bg-indigo-100/90 border-indigo-400 text-indigo-950 ring-1 ring-indigo-400'
+                                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {}} // handled by button click
+                                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 pointer-events-none"
+                                    />
+                                    {u.avatar ? (
+                                      <img
+                                        src={u.avatar}
+                                        alt={u.name}
+                                        className="w-6 h-6 rounded-full object-cover border border-indigo-200 shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-[9px] flex items-center justify-center shrink-0">
+                                        {u.name.charAt(0)}
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-bold truncate">{u.name}</p>
+                                      <p className="text-[10px] text-slate-500 truncate">
+                                        {u.posteLabel || (u.role === 'merch' ? 'Commerciale / Merch' : 'Admin')}
+                                      </p>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                          </div>
+                          <p className="text-[10px] text-indigo-700 italic">
+                            Ces commerciales apparaîtront en bannière dédiée au-dessus du cadre photo dans le Kanban et sur la fiche identitaire.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                          {initialMerchs.map((m, idx) => (
+                            <div key={m.id || idx} className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-indigo-200">
+                              {m.avatar ? (
+                                <img src={m.avatar} alt={m.name} className="w-5 h-5 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold text-[8px] flex items-center justify-center">
+                                  {m.name.charAt(0)}
+                                </div>
+                              )}
+                              <span className="text-xs font-bold text-slate-800">{m.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     {/* Frame Photo Card */}
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
                       <div className="flex items-center justify-between">
@@ -725,13 +994,14 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
                       <label className="text-xs font-semibold text-slate-700 block mb-1">
                         Notes & Historique Descriptif
                       </label>
-                      <textarea
-                        rows={3}
+                      <RichTextEditor
                         value={historiqueNote}
-                        onChange={(e) => setHistoriqueNote(e.target.value)}
+                        onChange={setHistoriqueNote}
                         disabled={!canEdit}
-                        placeholder="Précisions sur la fabrication, ajustements ou historique du modèle..."
-                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 focus:bg-white"
+                        placeholder="Précisions sur la fabrication, ajustements ou historique du modèle... (Mise en forme, liens, images, emojis)"
+                        minRows={3}
+                        isDark={false}
+                        users={allUsers}
                       />
                     </div>
 
@@ -746,9 +1016,25 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
                   </div>
                 </div>
               </form>
-            )}
 
-            {/* TAB 2: STEP CHECKLISTS */}
+              {/* Interactive Comments Section */}
+              <div className="mt-6">
+                <InteractiveCommentsSection
+                  comments={card.comments || []}
+                  currentUser={currentUser}
+                  allUsers={allUsers}
+                  onCommentsChange={(updatedComments) => {
+                    onUpdateCard({
+                      ...card,
+                      comments: updatedComments,
+                    });
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: STEP CHECKLISTS */}
             {activeTab === 'checklists' && (
               <div className="space-y-5">
                 {/* Step selector bar */}
@@ -1040,7 +1326,14 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                          {initialMerchs.some(
+                            (m) => (m.id && m.id === member.id) || m.name.toLowerCase() === member.name.toLowerCase()
+                          ) && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                              <UserCheck className="w-3 h-3" /> Commerciale Responsable
+                            </span>
+                          )}
                           <span
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
                               member.role === 'merch'
@@ -1071,123 +1364,20 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
             {/* TAB 5: AUDIT LOG MODIFICATION HISTORY TABLE & COMMENTS */}
             {activeTab === 'history' && (
               <div className="space-y-5">
+                <InteractiveCommentsSection
+                  comments={card.comments || []}
+                  currentUser={currentUser}
+                  onCommentsChange={(updatedComments) => {
+                    onUpdateCard({
+                      ...card,
+                      comments: updatedComments,
+                    });
+                  }}
+                />
+
                 <HistoryLogTable logs={card.historyLogs} />
               </div>
             )}
-          </div>
-
-          {/* RIGHT SIDE PANEL: COMMENTS & MESSAGES ATTACHED DIRECTLY TO THE CARD */}
-          {!isClient && (
-            <div className="w-full lg:w-80 xl:w-96 2xl:w-[420px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col max-h-[92vh] shrink-0">
-              {/* Header */}
-              <div className="p-4 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-indigo-400" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                    Commentaires & Messages
-                  </h3>
-                </div>
-                <span className="text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 px-2 py-0.5 rounded-full">
-                  {card.comments?.length || 0} msg
-                </span>
-              </div>
-
-              {/* Sub-header note */}
-              <div className="px-3 py-2 bg-indigo-50/90 border-b border-indigo-100 text-[10px] text-indigo-900 font-medium shrink-0 flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <span>Espace de discussion rattaché à ce modèle</span>
-              </div>
-
-              {/* Scrollable Comments List (length expands & scrolls as comments grow) */}
-              <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
-                {(!card.comments || card.comments.length === 0) ? (
-                  <div className="p-6 text-center bg-white border border-dashed border-slate-200 rounded-xl my-4 space-y-1">
-                    <MessageSquare className="w-7 h-7 text-slate-300 mx-auto" />
-                    <p className="text-xs font-bold text-slate-700">Aucun commentaire</p>
-                    <p className="text-[10px] text-slate-400">Rédigez la première remarque ci-dessous.</p>
-                  </div>
-                ) : (
-                  card.comments.map((comment) => {
-                    const isAuthor = comment.authorId === currentUser.id;
-                    return (
-                      <div
-                        key={comment.id}
-                        className={`p-3 rounded-xl border transition-all ${
-                          isAuthor
-                            ? 'bg-indigo-50/70 border-indigo-200 shadow-2xs'
-                            : 'bg-white border-slate-200 shadow-2xs'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {comment.authorAvatar ? (
-                              <img
-                                src={comment.authorAvatar}
-                                alt={comment.authorName}
-                                className="w-6 h-6 rounded-full object-cover border border-slate-300 shrink-0"
-                              />
-                            ) : (
-                              <div className="w-6 h-6 rounded-full bg-slate-800 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                                {comment.authorName.charAt(0)}
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-xs font-bold text-slate-900 truncate">{comment.authorName}</span>
-                                <span className="text-[8px] font-bold px-1.5 py-0.2 rounded uppercase bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
-                                  {comment.authorPoste || comment.authorRole}
-                                </span>
-                              </div>
-                              <span className="text-[9px] text-slate-400 block">{comment.createdAt}</span>
-                            </div>
-                          </div>
-
-                          {(isAuthor || currentUser.role === 'admin') && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteComment(comment.id)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors shrink-0"
-                              title="Supprimer ce message"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-
-                        <p className="text-xs text-slate-800 font-medium leading-relaxed whitespace-pre-wrap pl-8">
-                          {comment.content}
-                        </p>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Form pinned at bottom of Comments Side Panel */}
-              <form onSubmit={handleAddComment} className="p-3 bg-white border-t border-slate-200 shrink-0 space-y-2">
-                <textarea
-                  rows={2}
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Tapez un commentaire ou une consigne..."
-                  className="w-full px-2.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium resize-none"
-                />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-slate-500 truncate">
-                    Par: <strong className="text-slate-800">{currentUser.name}</strong>
-                  </span>
-                  <button
-                    type="submit"
-                    disabled={!newComment.trim()}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs disabled:opacity-50 transition-colors flex items-center gap-1 shrink-0"
-                  >
-                    <Send className="w-3 h-3" />
-                    Envoyer
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
           </div>
         </div>
       </div>

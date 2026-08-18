@@ -113,56 +113,34 @@ export const StepChecklistTree: React.FC<StepChecklistTreeProps> = ({
     e.preventDefault();
     if (!newTitle.trim() || !canEdit) return;
 
-    // Split by newlines so that pasting multi-line text creates multiple distinct items
-    const lines = newTitle
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    if (lines.length === 0) return;
-
-    const newItems: ChecklistItem[] = lines.map((line, index) => ({
-      id: `chk-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 4)}`,
-      title: line,
+    const newItem: ChecklistItem = {
+      id: `chk-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      title: newTitle.trim(),
       completed: false,
       subItems: [],
-    }));
+    };
 
-    const updated = [...checklists, ...newItems];
+    const updated = [...checklists, newItem];
     onChangeChecklists(updated);
     setNewTitle('');
 
     if (onLogAction) {
-      if (newItems.length === 1) {
-        onLogAction('Ajout checklist', `Nouvelle tâche: "${newItems[0].title}"`);
-      } else {
-        onLogAction(
-          'Ajout multiple checklists',
-          `${newItems.length} tâches ajoutées: ${newItems.map((i) => `"${i.title}"`).join(', ')}`
-        );
-      }
+      onLogAction('Ajout checklist', `Nouvelle tâche: "${newItem.title}"`);
     }
   };
 
   const handleAddSubItem = (parentId: string, parentTitle: string) => {
     if (!subTitle.trim() || !canEdit) return;
 
-    const lines = subTitle
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    if (lines.length === 0) return;
-
-    const newSubItems: ChecklistItem[] = lines.map((line, index) => ({
-      id: `sub-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 4)}`,
-      title: line,
+    const newSubItem: ChecklistItem = {
+      id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      title: subTitle.trim(),
       completed: false,
-    }));
+    };
 
     const updated = updateItemInList(checklists, parentId, (parent) => ({
       ...parent,
-      subItems: [...(parent.subItems || []), ...newSubItems],
+      subItems: [...(parent.subItems || []), newSubItem],
       completed: false, // Reopen parent if new subitem added
     }));
 
@@ -172,14 +150,7 @@ export const StepChecklistTree: React.FC<StepChecklistTreeProps> = ({
     setExpandedItems((prev) => ({ ...prev, [parentId]: true }));
 
     if (onLogAction) {
-      if (newSubItems.length === 1) {
-        onLogAction('Ajout sous-checklist', `Sous-tâche "${newSubItems[0].title}" ajoutée à "${parentTitle}"`);
-      } else {
-        onLogAction(
-          'Ajout multiple sous-checklists',
-          `${newSubItems.length} sous-tâches ajoutées à "${parentTitle}": ${newSubItems.map((i) => `"${i.title}"`).join(', ')}`
-        );
-      }
+      onLogAction('Ajout sous-checklist', `Sous-tâche "${newSubItem.title}" ajoutée à "${parentTitle}"`);
     }
   };
 
@@ -383,50 +354,36 @@ export const StepChecklistTree: React.FC<StepChecklistTreeProps> = ({
 
         {/* Input box to add a sub-checklist item */}
         {addingParentId === item.id && canEdit && (
-          <div className="ml-6 mt-1.5 p-2.5 bg-indigo-50/80 border border-indigo-200 rounded-lg space-y-1.5 animate-in fade-in">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-indigo-800 flex items-center gap-1">
-                <Plus className="w-3 h-3 text-indigo-600" /> Ajouter sous-tâche(s)
-              </span>
-              <span className="text-[10px] text-indigo-600/80">Collez plusieurs lignes pour créer plusieurs sous-tâches</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <textarea
-                rows={subTitle.includes('\n') ? Math.min(4, subTitle.split('\n').length) : 1}
-                value={subTitle}
-                onChange={(e) => setSubTitle(e.target.value)}
-                onPaste={(e) => {
-                  const pasted = e.clipboardData.getData('text');
-                  if (pasted.includes('\n')) {
-                    // let standard paste update state or handle immediately
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleAddSubItem(item.id, item.title);
-                  }
-                  if (e.key === 'Escape') setAddingParentId(null);
-                }}
-                placeholder="Intitulé(s) de sous-tâche (ou collez plusieurs lignes)..."
-                className="flex-1 px-2.5 py-1.5 text-xs border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white resize-none"
-                autoFocus
-              />
-              <button
-                type="button"
-                onClick={() => handleAddSubItem(item.id, item.title)}
-                className="px-3 py-1.5 text-xs bg-indigo-600 text-white font-bold rounded hover:bg-indigo-700 shrink-0"
-              >
-                Ajouter
-              </button>
-              <button
-                type="button"
-                onClick={() => setAddingParentId(null)}
-                className="px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700"
-              >
-                Annuler
-              </button>
-            </div>
+          <div className="ml-6 mt-1.5 p-2 bg-indigo-50/70 border border-indigo-200 rounded-lg flex items-center gap-2">
+            <span className="text-xs font-semibold text-indigo-700 whitespace-nowrap">
+              Sous-tâche:
+            </span>
+            <input
+              type="text"
+              value={subTitle}
+              onChange={(e) => setSubTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddSubItem(item.id, item.title);
+                if (e.key === 'Escape') setAddingParentId(null);
+              }}
+              placeholder="Intitulé de la sous-checklist..."
+              className="flex-1 px-2.5 py-1 text-xs border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => handleAddSubItem(item.id, item.title)}
+              className="px-2.5 py-1 text-xs bg-indigo-600 text-white font-medium rounded hover:bg-indigo-700"
+            >
+              Ajouter
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddingParentId(null)}
+              className="px-2 py-1 text-xs text-slate-500 hover:text-slate-700"
+            >
+              Annuler
+            </button>
           </div>
         )}
 
@@ -478,39 +435,22 @@ export const StepChecklistTree: React.FC<StepChecklistTreeProps> = ({
 
       {/* Form to add new primary Checklist item */}
       {canEdit && (
-        <form onSubmit={handleAddParentItem} className="space-y-1.5 pt-1">
-          <div className="flex gap-2 items-start">
-            <textarea
-              rows={newTitle.includes('\n') ? Math.min(5, newTitle.split('\n').length) : 1}
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleAddParentItem(e);
-                }
-              }}
-              placeholder="+ Ajouter une ou plusieurs checklists (collez une liste ligne par ligne)..."
-              className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white resize-none"
-            />
-            <button
-              type="submit"
-              disabled={!newTitle.trim()}
-              className="px-4 py-2 text-xs font-bold bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5 shrink-0 transition-colors shadow-2xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>
-                {newTitle.trim().split(/\r?\n/).filter((l) => l.trim().length > 0).length > 1
-                  ? `Ajouter (${newTitle.trim().split(/\r?\n/).filter((l) => l.trim().length > 0).length})`
-                  : 'Ajouter'}
-              </span>
-            </button>
-          </div>
-          {newTitle.includes('\n') && (
-            <p className="text-[11px] text-indigo-600 font-medium px-1">
-              ✨ {newTitle.split(/\r?\n/).filter((l) => l.trim().length > 0).length} tâches distinctes seront créées automatiquement en un seul clic !
-            </p>
-          )}
+        <form onSubmit={handleAddParentItem} className="flex gap-2 pt-1">
+          <input
+            type="text"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="+ Ajouter une nouvelle checklist principale..."
+            className="flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+          />
+          <button
+            type="submit"
+            disabled={!newTitle.trim()}
+            className="px-3 py-1.5 text-xs font-medium bg-slate-900 text-white rounded-md hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1 shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Ajouter
+          </button>
         </form>
       )}
 

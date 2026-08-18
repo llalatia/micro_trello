@@ -13,8 +13,16 @@ import {
   CardComment,
   CardLabel,
   CardMerchandiser,
+  InvitedVisitor,
 } from '../types';
-import { canUserCreateOrEditCards } from '../utils/permissions';
+import {
+  canUserCreateOrEditCards,
+  isRespPointClients,
+  isVisiteur,
+  canAssignMerchandisers,
+  canInviteVisitors,
+  canRemoveVisitors,
+} from '../utils/permissions';
 import { getCardMerchandisers } from '../utils/merchandiser';
 import {
   X,
@@ -40,6 +48,12 @@ import {
   Send,
   Tag,
   UserCheck,
+  Mail,
+  Shield,
+  ShieldAlert,
+  UserMinus,
+  Check,
+  AlertCircle,
 } from 'lucide-react';
 import { StepChecklistTree } from './StepChecklistTree';
 import { HistoryLogTable } from './HistoryLogTable';
@@ -54,6 +68,8 @@ interface CardIdentityModalProps {
   currentUser: UserProfile;
   onClose: () => void;
   onUpdateCard: (updated: Card) => void;
+  onInviteVisitorUser?: (cardId: string, email: string, name?: string) => void;
+  onRemoveVisitorUser?: (cardId: string, email: string) => void;
 }
 
 export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
@@ -63,11 +79,19 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
   currentUser,
   onClose,
   onUpdateCard,
+  onInviteVisitorUser,
+  onRemoveVisitorUser,
 }) => {
   const [activeTab, setActiveTab] = useState<'identity' | 'checklists' | 'attachments' | 'members' | 'history'>('identity');
   const [viewingAttachment, setViewingAttachment] = useState<CardAttachment | null>(null);
 
   const isClient = currentUser.role === 'client';
+  const isUserVisiteur = isVisiteur(currentUser);
+  const canEdit = canUserCreateOrEditCards(currentUser);
+  const canAssignMerchs = canAssignMerchandisers(currentUser);
+  const canInvite = canInviteVisitors(currentUser);
+  const canRemove = canRemoveVisitors(currentUser);
+  const isPointClients = isRespPointClients(currentUser);
 
   // Form state for specs
   const [modele, setModele] = useState(card.modele);
@@ -93,14 +117,19 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedMemberRole, setSelectedMemberRole] = useState<UserRole>('merch');
 
+  // Visitor Invitation state
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteNotes, setInviteNotes] = useState('');
+  const [inviteSuccessMsg, setInviteSuccessMsg] = useState<string | null>(null);
+  const [inviteErrorMsg, setInviteErrorMsg] = useState<string | null>(null);
+
   // Selected step checklist tab view inside card modal
   const [selectedStepIdForChecklists, setSelectedStepIdForChecklists] = useState(card.currentStepId);
 
   // Labels popover state
   const [isLabelPopoverOpen, setIsLabelPopoverOpen] = useState(false);
   const [availableLabels, setAvailableLabels] = useState<CardLabel[]>(DEFAULT_LABELS);
-
-  const canEdit = canUserCreateOrEditCards(currentUser);
 
   // Parse various date strings safely into a Date object
   const parseTimestampToDate = (ts: string): Date => {
@@ -428,6 +457,88 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
     });
   };
 
+  // Invite Visitor (Exclusivité Resp Point Clients & Admin)
+  const handleInviteVisitor = (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteErrorMsg(null);
+    setInviteSuccessMsg(null);
+
+    if (!inviteEmail.trim() || !inviteEmail.includes('@')) {
+      setInviteErrorMsg('Veuillez saisir une adresse e-mail valide.');
+      return;
+    }
+
+    const normalizedEmail = inviteEmail.trim().toLowerCase();
+    const existingVisitors = card.invitedVisitors || [];
+
+    if (existingVisitors.some((v) => v.email.toLowerCase() === normalizedEmail)) {
+      setInviteErrorMsg('Cette adresse e-mail est déjà invitée sur cette carte.');
+      return;
+    }
+
+    const visitorName = inviteName.trim() || inviteEmail.split('@')[0];
+    const newVisitor: InvitedVisitor = {
+      id: `vis-${Date.now()}`,
+      email: normalizedEmail,
+      name: visitorName,
+      avatar: `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(visitorName)}&eyes=variant08&hair=variant14`,
+      invitedAt: new Date().toISOString(),
+      invitedBy: currentUser.name + (currentUser.posteLabel ? ` (${currentUser.posteLabel})` : ''),
+      invitedById: currentUser.id,
+      notes: inviteNotes.trim() || undefined,
+    };
+
+    const updatedVisitors = [...existingVisitors, newVisitor];
+    const updatedLogs = logAction(
+      'Invitation Visiteur Observateur',
+      `Visiteur "${visitorName}" (${normalizedEmail}) invité en observation par ${currentUser.name}`
+    );
+
+    const updatedCard: Card = {
+      ...card,
+      invitedVisitors: updatedVisitors,
+      historyLogs: updatedLogs,
+    };
+
+    onUpdateCard(updatedCard);
+    onInviteVisitorUser?.(card.id, normalizedEmail, visitorName);
+
+    setInviteEmail('');
+    setInviteName('');
+    setInviteNotes('');
+    setInviteSuccessMsg(`Invitation envoyée avec succès à ${normalizedEmail} !`);
+    setTimeout(() => setInviteSuccessMsg(null), 5000);
+  };
+
+  // Remove / Revoke Visitor (Exclusivité Resp Point Clients & Admin)
+  const handleRemoveVisitor = (visitorEmail: string, visitorName?: string) => {
+    if (!canRemove) return;
+    if (
+      !confirm(
+        `Êtes-vous sûr de vouloir retirer définitivement l'accès observateur à ${visitorName || visitorEmail} ?`
+      )
+    ) {
+      return;
+    }
+
+    const updatedVisitors = (card.invitedVisitors || []).filter(
+      (v) => v.email.toLowerCase() !== visitorEmail.toLowerCase()
+    );
+    const updatedLogs = logAction(
+      'Révocation Visiteur Observateur',
+      `Accès observateur de ${visitorName || visitorEmail} révoqué par ${currentUser.name}`
+    );
+
+    const updatedCard: Card = {
+      ...card,
+      invitedVisitors: updatedVisitors,
+      historyLogs: updatedLogs,
+    };
+
+    onUpdateCard(updatedCard);
+    onRemoveVisitorUser?.(card.id, visitorEmail);
+  };
+
   // Update Checklist items for step
   const handleChecklistsChange = (stepId: string, updatedChecklists: ChecklistItem[]) => {
     const updatedStepChecklists = {
@@ -446,6 +557,20 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
       <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden my-auto">
           {/* Top Identity Header Banner */}
+          {isUserVisiteur && (
+            <div className="bg-amber-600/90 text-amber-50 px-5 py-2.5 text-xs font-semibold flex items-center justify-between gap-3 border-b border-amber-500/40">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-200 shrink-0" />
+                <span>
+                  <strong>Accès Visiteur Observateur (Lecture Seule)</strong> — Vous êtes invité à observer uniquement cette carte. Aucune modification n'est autorisée.
+                </span>
+              </div>
+              <span className="text-[10px] bg-black/20 px-2 py-0.5 rounded font-mono">
+                {card.reference}
+              </span>
+            </div>
+          )}
+
           <div className="bg-slate-900 text-white p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 shrink-0">
             <div className="space-y-1">
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -489,6 +614,14 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
                     {initialMerchs.map((m) => m.name.split(' ')[0]).join(', ')}
                   </strong>
                 </div>
+
+                {/* Invited visitors count in header */}
+                {card.invitedVisitors && card.invitedVisitors.length > 0 && (
+                  <span className="text-xs text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded-md border border-amber-700/50 flex items-center gap-1">
+                    <Eye className="w-3 h-3 text-amber-400" />
+                    {card.invitedVisitors.length} visiteur(s) invité(s)
+                  </span>
+                )}
               </div>
 
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
@@ -616,7 +749,7 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
               }`}
             >
               <Users className="w-4 h-4 text-blue-600" />
-              Membres & Accès ({card.members.length})
+              Membres & Visiteurs ({card.members.length + (card.invitedVisitors?.length || 0)})
             </button>
 
             <button
@@ -643,14 +776,22 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
                   <div className="space-y-4">
                     {/* Commercial(e)s / Merchandisers Responsables (2 à 4 Merchs) */}
                     <div className="bg-white p-4 rounded-xl border border-indigo-200 shadow-2xs space-y-2.5">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
                         <label className="text-xs font-bold text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
                           <UserCheck className="w-4 h-4 text-indigo-600" />
                           Commercial(e)s Responsables (2 à 4 Merchs)
                         </label>
-                        <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-600 text-white rounded-full">
-                          {selectedMerchandiserIds.length} sélectionnée(s)
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {canAssignMerchs && (
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full flex items-center gap-1">
+                              <Sparkles className="w-3 h-3 text-indigo-500" />
+                              Privilège Resp Point Clients
+                            </span>
+                          )}
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-600 text-white rounded-full">
+                            {selectedMerchandiserIds.length} sélectionnée(s)
+                          </span>
+                        </div>
                       </div>
 
                       {canEdit ? (
@@ -661,7 +802,7 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {allUsers
-                              .filter((u) => u.role === 'merch' || u.role === 'admin')
+                              .filter((u) => u.role === 'merch' || u.role === 'admin' || u.role === 'resp_point_clients')
                               .map((u) => {
                                 const isSelected = selectedMerchandiserIds.includes(u.id);
                                 return (
@@ -705,7 +846,7 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
                                     <div className="min-w-0">
                                       <p className="text-xs font-bold truncate">{u.name}</p>
                                       <p className="text-[10px] text-slate-500 truncate">
-                                        {u.posteLabel || (u.role === 'merch' ? 'Commerciale / Merch' : 'Admin')}
+                                        {u.posteLabel || (u.role === 'resp_point_clients' ? 'Resp Point Clients' : u.role === 'merch' ? 'Commerciale / Merch' : 'Admin')}
                                       </p>
                                     </div>
                                   </button>
@@ -723,7 +864,7 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
                               {m.avatar ? (
                                 <img src={m.avatar} alt={m.name} className="w-5 h-5 rounded-full object-cover" />
                               ) : (
-                                <div className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold text-[8px] flex items-center justify-center">
+                                <div className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold text-[9px] flex items-center justify-center">
                                   {m.name.charAt(0)}
                                 </div>
                               )}
@@ -1253,109 +1394,281 @@ export const CardIdentityModal: React.FC<CardIdentityModalProps> = ({
             {/* TAB 4: MEMBERS & ACCESS */}
             {activeTab === 'members' && (
               <div className="space-y-6">
-                {/* Add member form */}
-                {canEdit && (
-                  <form onSubmit={handleAddMember} className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <UserPlus className="w-4 h-4 text-indigo-600" />
-                      Associer un Membre ou un Client
-                    </h3>
-
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <select
-                        value={selectedUserId}
-                        onChange={(e) => setSelectedUserId(e.target.value)}
-                        className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      >
-                        <option value="">-- Choisir un utilisateur --</option>
-                        {allUsers.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name} ({u.role.toUpperCase()}) - {u.email}
-                          </option>
-                        ))}
-                      </select>
-
-                      <select
-                        value={selectedMemberRole}
-                        onChange={(e) => setSelectedMemberRole(e.target.value as UserRole)}
-                        className="px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold"
-                      >
-                        <option value="merch">Accès MERCH (Modification complète)</option>
-                        <option value="client">Accès CLIENT (Observation / Lecture seule)</option>
-                      </select>
-
-                      <button
-                        type="submit"
-                        disabled={!selectedUserId}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs disabled:opacity-50 transition-colors"
-                      >
-                        Ajouter
-                      </button>
+                {/* SECTION A: VISITEURS OBSERVATEURS INVITÉS (Par e-mail) */}
+                <div className="bg-gradient-to-br from-amber-500/5 via-white to-amber-500/10 p-5 rounded-xl border border-amber-200 shadow-2xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-100 pb-3">
+                    <div>
+                      <h3 className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                        <Eye className="w-4 h-4 text-amber-600" />
+                        Visiteurs Observateurs Invités par E-mail
+                      </h3>
+                      <p className="text-[11px] text-amber-800/80 mt-0.5">
+                        Le visiteur invité ne peut observer que cette fiche identitaire en lecture seule (accès strictement restreint).
+                      </p>
                     </div>
-                  </form>
-                )}
+                    <div className="flex items-center gap-1.5">
+                      {isPointClients && (
+                        <span className="text-[10px] font-extrabold px-2.5 py-1 bg-amber-600 text-white rounded-full flex items-center gap-1 shadow-2xs">
+                          <Sparkles className="w-3 h-3" />
+                          Privilège Resp Point Clients
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-200 rounded-full">
+                        {card.invitedVisitors?.length || 0} invité(s)
+                      </span>
+                    </div>
+                  </div>
 
-                {/* List of active members */}
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Membres autorisés sur cette carte ({card.members.length})
-                  </h3>
+                  {/* Form to invite visitor (Restricted to Resp Point Clients and Admin) */}
+                  {canInvite ? (
+                    <form onSubmit={handleInviteVisitor} className="bg-white p-4 rounded-xl border border-amber-200/80 shadow-2xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <Mail className="w-4 h-4 text-indigo-600" />
+                          Inviter un nouvel observateur par e-mail
+                        </label>
+                        <span className="text-[10px] text-slate-500 italic">
+                          Invitation directe avec mot de passe auto-généré
+                        </span>
+                      </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {card.members.map((member) => (
-                      <div
-                        key={member.id}
-                        className="p-3.5 border border-slate-200 rounded-xl bg-slate-50/50 flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {member.avatar ? (
-                            <img
-                              src={member.avatar}
-                              alt={member.name}
-                              className="w-9 h-9 rounded-full object-cover border border-slate-200"
-                            />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-slate-800 text-white font-bold text-xs flex items-center justify-center">
-                              {member.name.charAt(0)}
-                            </div>
-                          )}
+                      {inviteErrorMsg && (
+                        <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs font-medium flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                          <span>{inviteErrorMsg}</span>
+                        </div>
+                      )}
 
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800 truncate">{member.name}</p>
-                            <p className="text-[11px] text-slate-500 truncate">{member.email}</p>
-                          </div>
+                      {inviteSuccessMsg && (
+                        <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-medium flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>{inviteSuccessMsg}</span>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-1">
+                          <input
+                            type="email"
+                            required
+                            value={inviteEmail}
+                            onChange={(e) => setInviteEmail(e.target.value)}
+                            placeholder="visiteur@client.com *"
+                            className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
                         </div>
 
-                        <div className="flex items-center gap-2 flex-wrap justify-end">
-                          {initialMerchs.some(
-                            (m) => (m.id && m.id === member.id) || m.name.toLowerCase() === member.name.toLowerCase()
-                          ) && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                              <UserCheck className="w-3 h-3" /> Commerciale Responsable
-                            </span>
-                          )}
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                              member.role === 'merch'
-                                ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                                : 'bg-amber-100 text-amber-800 border border-amber-200'
-                            }`}
-                          >
-                            {member.role === 'merch' ? 'MERCH (Édition)' : 'CLIENT (Lecture)'}
-                          </span>
+                        <div className="sm:col-span-1">
+                          <input
+                            type="text"
+                            value={inviteName}
+                            onChange={(e) => setInviteName(e.target.value)}
+                            placeholder="Nom du visiteur (ex: Jean Dupont)"
+                            className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
 
-                          {canEdit && card.members.length > 1 && (
-                            <button
-                              onClick={() => handleRemoveMember(member.id, member.name)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                              title="Retirer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                        <div className="sm:col-span-1 flex gap-2">
+                          <input
+                            type="text"
+                            value={inviteNotes}
+                            onChange={(e) => setInviteNotes(e.target.value)}
+                            placeholder="Note / Rôle externe (facultatif)"
+                            className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <button
+                            type="submit"
+                            disabled={!inviteEmail}
+                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs disabled:opacity-50 transition-colors flex items-center gap-1.5 shrink-0"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            Inviter
+                          </button>
                         </div>
                       </div>
-                    ))}
+                    </form>
+                  ) : (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-xs flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span>
+                        Seul le <strong>Responsable Point Clients</strong> ou un Directeur peut inviter ou révoquer des visiteurs sur cette fiche.
+                      </span>
+                    </div>
+                  )}
+
+                  {/* List of invited visitors */}
+                  <div className="space-y-2.5">
+                    <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Observateurs enregistrés sur cette fiche ({card.invitedVisitors?.length || 0})
+                    </h4>
+
+                    {(!card.invitedVisitors || card.invitedVisitors.length === 0) ? (
+                      <div className="p-4 rounded-xl border border-dashed border-amber-200 bg-amber-50/50 text-center">
+                        <Eye className="w-5 h-5 text-amber-500 mx-auto mb-1 opacity-70" />
+                        <p className="text-xs font-semibold text-amber-900">Aucun visiteur invité pour l'instant</p>
+                        <p className="text-[11px] text-amber-700/80">
+                          Utilisez le formulaire ci-dessus pour inviter un tiers en observation exclusive.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {card.invitedVisitors.map((vis) => (
+                          <div
+                            key={vis.id}
+                            className="p-3.5 border border-amber-200/90 rounded-xl bg-white shadow-2xs flex items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              {vis.avatar ? (
+                                <img
+                                  src={vis.avatar}
+                                  alt={vis.name}
+                                  className="w-9 h-9 rounded-full object-cover border border-amber-200"
+                                />
+                              ) : (
+                                <div className="w-9 h-9 rounded-full bg-amber-600 text-white font-bold text-xs flex items-center justify-center">
+                                  {vis.name.charAt(0)}
+                                </div>
+                              )}
+
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-xs font-bold text-slate-900 truncate">{vis.name}</p>
+                                  <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 uppercase">
+                                    Observateur
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-500 truncate">{vis.email}</p>
+                                {vis.invitedBy && (
+                                  <p className="text-[10px] text-amber-800/80 truncate">
+                                    Invité par {vis.invitedBy}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {canRemove && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveVisitor(vis.email, vis.name)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-200 shrink-0"
+                                title="Révoquer et retirer le visiteur"
+                              >
+                                <UserMinus className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* SECTION B: MEMBRES ÉQUIPE & CLIENTS */}
+                <div className="space-y-4">
+                  {/* Add member form */}
+                  {canEdit && (
+                    <form onSubmit={handleAddMember} className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <UserPlus className="w-4 h-4 text-indigo-600" />
+                        Associer un Membre ou un Client de l'équipe
+                      </h3>
+
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <select
+                          value={selectedUserId}
+                          onChange={(e) => setSelectedUserId(e.target.value)}
+                          className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                          <option value="">-- Choisir un utilisateur --</option>
+                          {allUsers.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} ({u.role.toUpperCase()}) - {u.email}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={selectedMemberRole}
+                          onChange={(e) => setSelectedMemberRole(e.target.value as UserRole)}
+                          className="px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold"
+                        >
+                          <option value="merch">Accès MERCH (Modification complète)</option>
+                          <option value="client">Accès CLIENT (Observation / Lecture seule)</option>
+                        </select>
+
+                        <button
+                          type="submit"
+                          disabled={!selectedUserId}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs disabled:opacity-50 transition-colors"
+                        >
+                          Ajouter
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* List of active members */}
+                  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Membres autorisés sur cette carte ({card.members.length})
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {card.members.map((member) => (
+                        <div
+                          key={member.id}
+                          className="p-3.5 border border-slate-200 rounded-xl bg-slate-50/50 flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {member.avatar ? (
+                              <img
+                                src={member.avatar}
+                                alt={member.name}
+                                className="w-9 h-9 rounded-full object-cover border border-slate-200"
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-slate-800 text-white font-bold text-xs flex items-center justify-center">
+                                {member.name.charAt(0)}
+                              </div>
+                            )}
+
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 truncate">{member.name}</p>
+                              <p className="text-[11px] text-slate-500 truncate">{member.email}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                            {initialMerchs.some(
+                              (m) => (m.id && m.id === member.id) || m.name.toLowerCase() === member.name.toLowerCase()
+                            ) && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                <UserCheck className="w-3 h-3" /> Commerciale Responsable
+                              </span>
+                            )}
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                                member.role === 'merch'
+                                  ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                  : 'bg-amber-100 text-amber-800 border border-amber-200'
+                              }`}
+                            >
+                              {member.role === 'merch' ? 'MERCH (Édition)' : 'CLIENT (Lecture)'}
+                            </span>
+
+                            {canEdit && card.members.length > 1 && (
+                              <button
+                                onClick={() => handleRemoveMember(member.id, member.name)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                                title="Retirer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

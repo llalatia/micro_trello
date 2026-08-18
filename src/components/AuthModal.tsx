@@ -15,10 +15,13 @@ interface AuthModalProps {
 }
 
 export const ROLES_LIST = [
-  { value: 'merch', label: 'Merchandiser / Éditeur' },
+  { value: 'resp_point_clients', label: 'Resp Point Clients (Privilège Merch + Assigner Merchs & Inviter Visiteurs)' },
+  { value: 'merch', label: 'Merchandiser / Commercial' },
+  { value: 'directeur général', label: 'Directeur Général' },
+  { value: 'directeur', label: 'Directeur' },
   { value: 'client', label: 'Client / Marque' },
+  { value: 'visiteur', label: 'Visiteur (Observateur en lecture seule)' },
   { value: 'commercial', label: 'Commercial' },
-  { value: 'directeur', label: 'Directeur / Direction' },
   { value: 'fournisseur', label: 'Fournisseur / Sous-traitant' },
   { value: 'magasinier', label: 'Magasinier / Stock' },
   { value: 'resp_planning', label: 'Responsable Planning' },

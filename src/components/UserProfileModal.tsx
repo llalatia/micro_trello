@@ -37,6 +37,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   const [name, setName] = useState(targetUser.name);
   const [email, setEmail] = useState(targetUser.email);
+  const [role, setRole] = useState(targetUser.role || 'merch');
   const [posteLabel, setPosteLabel] = useState(targetUser.posteLabel || '');
   const [password, setPassword] = useState(targetUser.password || '123456');
   const [avatar, setAvatar] = useState(targetUser.avatar || '');
@@ -47,6 +48,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     setSelectedUserId(u.id);
     setName(u.name);
     setEmail(u.email);
+    setRole(u.role || 'merch');
     setPosteLabel(u.posteLabel || '');
     setPassword(u.password || '123456');
     setAvatar(u.avatar || '');
@@ -63,6 +65,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       ...targetUser,
       name: name.trim(),
       email: email.trim(),
+      role: role as any,
       posteLabel: posteLabel.trim() || targetUser.posteLabel,
       password: password || '123456',
       avatar: avatar.trim() || undefined,
@@ -186,7 +189,32 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Intitulé de poste / Rôle
+                Rôle système
+              </label>
+              <div className="relative">
+                <Shield className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs font-semibold text-slate-900 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="resp_point_clients">Resp Point Clients</option>
+                  <option value="merch">Commercial / Merchandiser</option>
+                  <option value="directeur">Directeur</option>
+                  <option value="directeur général">Directeur Général</option>
+                  <option value="client">Client / Partenaire</option>
+                  <option value="visiteur">Visiteur (Observateur)</option>
+                  <option value="admin">Administrateur</option>
+                  <option value="resp_planning">Responsable Planning</option>
+                  <option value="fournisseur">Fournisseur</option>
+                  <option value="magasinier">Magasinier</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Intitulé de poste
               </label>
               <div className="relative">
                 <Briefcase className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />

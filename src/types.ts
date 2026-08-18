@@ -1,4 +1,12 @@
-export type UserRole = 'merch' | 'client' | 'admin';
+export type UserRole =
+  | 'merch'
+  | 'client'
+  | 'admin'
+  | 'directeur'
+  | 'directeur général'
+  | 'resp_point_clients'
+  | 'visiteur'
+  | string;
 
 export interface UserProfile {
   id: string;
@@ -13,6 +21,19 @@ export interface UserProfile {
   address?: string;
   notes?: string;
   brandColor?: string;
+  invitedBy?: string; // ID or name of the Resp Point Clients who invited this user
+  invitedCardIds?: string[]; // IDs of cards this visitor has access to
+}
+
+export interface InvitedVisitor {
+  id: string;
+  email: string;
+  name?: string;
+  avatar?: string;
+  invitedAt: string;
+  invitedBy: string; // Name or ID of Resp Point Clients
+  invitedById?: string;
+  notes?: string;
 }
 
 export interface ChecklistItem {
@@ -127,4 +148,5 @@ export interface Card {
   merchandiserName?: string;
   merchandiserId?: string;
   merchandiserAvatar?: string;
+  invitedVisitors?: InvitedVisitor[];
 }

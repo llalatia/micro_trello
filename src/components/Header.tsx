@@ -9,6 +9,7 @@ import {
   Plus,
   Search,
   Shield,
+  ShieldCheck,
   Eye,
   Settings,
   LogOut,
@@ -17,8 +18,8 @@ import {
 } from 'lucide-react';
 
 interface HeaderProps {
-  viewMode: 'kanban' | 'list' | 'clients';
-  onViewModeChange: (mode: 'kanban' | 'list' | 'clients') => void;
+  viewMode: 'kanban' | 'list' | 'clients' | 'direction';
+  onViewModeChange: (mode: 'kanban' | 'list' | 'clients' | 'direction') => void;
   currentUser: UserProfile | null;
   allUsers: UserProfile[];
   onUserChange: (user: UserProfile) => void;
@@ -47,6 +48,13 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenStepConfig,
   totalCards,
 }) => {
+  const isDirector =
+    Boolean(currentUser) &&
+    (currentUser?.role === 'directeur' ||
+      currentUser?.role === 'directeur général' ||
+      currentUser?.role?.toLowerCase() === 'directeur' ||
+      currentUser?.role?.toLowerCase() === 'directeur général' ||
+      currentUser?.role?.toLowerCase() === 'directeur general');
   return (
     <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-md">
       {/* Top Banner Bar */}
@@ -182,6 +190,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             <button
+              id="nav-tab-clients"
               onClick={() => onViewModeChange('clients')}
               className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-colors ${
                 viewMode === 'clients'
@@ -192,6 +201,25 @@ export const Header: React.FC<HeaderProps> = ({
               <Building2 className="w-3.5 h-3.5" />
               Clients
             </button>
+
+            {isDirector && (
+              <button
+                id="nav-tab-direction"
+                onClick={() => onViewModeChange('direction')}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                  viewMode === 'direction'
+                    ? 'bg-amber-600 text-white shadow-2xs ring-1 ring-amber-400/50'
+                    : 'text-amber-400 hover:text-amber-200 hover:bg-slate-800'
+                }`}
+                title="Vue de pilotage stratégique pour la Direction"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Direction</span>
+                <span className="text-[9px] px-1 py-0.2 bg-amber-500/30 text-amber-200 rounded font-semibold border border-amber-400/30">
+                  Pilote
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Search Bar */}

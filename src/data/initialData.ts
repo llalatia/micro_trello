@@ -3,6 +3,44 @@ import { DEFAULT_LABELS } from './defaultLabels';
 
 export const DEFAULT_USERS: UserProfile[] = [
   {
+    id: 'usr-rpc-1',
+    name: 'Marc Delorme',
+    email: 'marc.delorme@fashionbrand.com',
+    role: 'resp_point_clients',
+    posteLabel: 'Resp Point Clients',
+    password: '123456',
+    avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Jack&clothing=blazerAndShirt&eyes=happy&facialHairProbability=0',
+  },
+  {
+    id: 'usr-dir-1',
+    name: 'Béatrice de Montmirail',
+    email: 'beatrice.montmirail@fashionbrand.com',
+    role: 'directeur général',
+    posteLabel: 'Directrice Générale',
+    password: '123456',
+    avatar: 'https://api.dicebear.com/9.x/lorelei/svg?seed=Beatrix&eyes=variant04&hair=variant02',
+  },
+  {
+    id: 'usr-dir-2',
+    name: 'Jean-Marc Vaneck',
+    email: 'jm.vaneck@fashionbrand.com',
+    role: 'directeur',
+    posteLabel: 'Directeur de Production',
+    password: '123456',
+    avatar: 'https://api.dicebear.com/9.x/adventurer/svg?seed=Marcus&hair=short01&glasses=variant01',
+  },
+  {
+    id: 'usr-vis-1',
+    name: 'Claire Valette (Visiteur)',
+    email: 'claire.valette@audit-mode.fr',
+    role: 'visiteur',
+    posteLabel: 'Visiteur (Observateur)',
+    password: '123456',
+    avatar: 'https://api.dicebear.com/9.x/lorelei/svg?seed=Claire&eyes=variant08&hair=variant14',
+    invitedBy: 'Marc Delorme',
+    invitedCardIds: ['card-1', 'card-3'],
+  },
+  {
     id: 'usr-1',
     name: 'Sophie Bertrand',
     email: 'sophie.bertrand@fashionbrand.com',
@@ -489,6 +527,17 @@ export const INITIAL_CARDS: Card[] = [
     merchandiserName: 'Sophie Bertrand',
     merchandiserId: 'usr-1',
     merchandiserAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+    invitedVisitors: [
+      {
+        id: 'usr-vis-1',
+        email: 'claire.valette@audit-mode.fr',
+        name: 'Claire Valette (Visiteur)',
+        avatar: 'https://api.dicebear.com/9.x/lorelei/svg?seed=Claire&eyes=variant08&hair=variant14',
+        invitedAt: '2026-08-02T10:00:00Z',
+        invitedBy: 'Marc Delorme (Resp Point Clients)',
+        notes: 'Observation audit qualité & suivi modèle',
+      },
+    ],
   },
   {
     id: 'card-102',
@@ -697,5 +746,16 @@ export const INITIAL_CARDS: Card[] = [
     merchandiserName: 'Sophie Bertrand',
     merchandiserId: 'usr-1',
     merchandiserAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+    invitedVisitors: [
+      {
+        id: 'usr-vis-1',
+        email: 'claire.valette@audit-mode.fr',
+        name: 'Claire Valette (Visiteur)',
+        avatar: 'https://api.dicebear.com/9.x/lorelei/svg?seed=Claire&eyes=variant08&hair=variant14',
+        invitedAt: '2026-08-05T14:30:00Z',
+        invitedBy: 'Marc Delorme (Resp Point Clients)',
+        notes: 'Observation stylisme & conformité',
+      },
+    ],
   },
 ];

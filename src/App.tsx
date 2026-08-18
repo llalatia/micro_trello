@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Card, StepDefinition, UserProfile } from './types';
 import { DEFAULT_STEPS, INITIAL_CARDS, DEFAULT_USERS } from './data/initialData';
+import { isCardVisibleToUser } from './utils/permissions';
 import { Header } from './components/Header';
 import { KanbanBoard } from './components/KanbanBoard';
 import { CardListView } from './components/CardListView';
 import { ClientsView } from './components/ClientsView';
+import { DirectionView } from './components/DirectionView';
 import { CardIdentityModal } from './components/CardIdentityModal';
 import { StepConfigModal } from './components/StepConfigModal';
 import { CreateCardModal } from './components/CreateCardModal';
@@ -45,9 +47,17 @@ export default function App() {
     }
   });
 
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_CURRENT_USER_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'clients'>('kanban');
+  // Always land on 'kanban' mode by default on connection & reconnection
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'clients' | 'direction'>('kanban');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modals state
@@ -107,20 +117,23 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Auth Handlers
+  // Auth Handlers with automatic Kanban landing
   const handleLogout = () => {
     setCurrentUser(null);
+    setViewMode('kanban');
     setIsAuthModalOpen(true);
   };
 
   const handleLogin = (user: UserProfile) => {
     setCurrentUser(user);
+    setViewMode('kanban'); // Always direct user to their appropriate kanban view on login
     setIsAuthModalOpen(false);
   };
 
   const handleSignup = (newUser: UserProfile) => {
     setAllUsers((prev) => [...prev, newUser]);
     setCurrentUser(newUser);
+    setViewMode('kanban'); // Always direct user to their appropriate kanban view on signup
     setIsAuthModalOpen(false);
   };
 
@@ -135,6 +148,54 @@ export default function App() {
   // Handle Card Creation
   const handleCreateCard = (newCard: Card) => {
     setCards((prev) => [newCard, ...prev]);
+  };
+
+  // Visitor User Account Auto-provisioning & Synchronization
+  const handleInviteVisitorUser = (email: string, name: string, cardId: string) => {
+    const cleanEmail = email.toLowerCase().trim();
+    setAllUsers((prevUsers) => {
+      const existing = prevUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
+      if (existing) {
+        const existingInvited = existing.invitedCardIds || [];
+        if (!existingInvited.includes(cardId)) {
+          return prevUsers.map((u) =>
+            u.id === existing.id
+              ? { ...u, invitedCardIds: [...existingInvited, cardId] }
+              : u
+          );
+        }
+        return prevUsers;
+      }
+
+      // Create new visitor user account so they can log in directly to observe their card
+      const newVisitor: UserProfile = {
+        id: `usr-vis-${Date.now()}`,
+        name: name || cleanEmail.split('@')[0],
+        email: cleanEmail,
+        role: 'visiteur',
+        posteLabel: 'Visiteur (Observateur)',
+        password: '123',
+        avatar: `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(name || cleanEmail)}&eyes=variant08&hair=variant14`,
+        invitedCardIds: [cardId],
+      };
+      return [...prevUsers, newVisitor];
+    });
+  };
+
+  const handleRemoveVisitorUser = (email: string, cardId: string) => {
+    const cleanEmail = email.toLowerCase().trim();
+    setAllUsers((prevUsers) =>
+      prevUsers.map((u) => {
+        if (u.email.toLowerCase().trim() === cleanEmail) {
+          const updatedInvited = (u.invitedCardIds || []).filter((id) => id !== cardId);
+          return {
+            ...u,
+            invitedCardIds: updatedInvited,
+          };
+        }
+        return u;
+      })
+    );
   };
 
   // Move Card between steps quickly in Kanban
@@ -171,47 +232,10 @@ export default function App() {
     handleUpdateCard(updatedCard);
   };
 
-  // Helper to check if a card belongs to a client user
-  const isCardForClient = (card: Card, user: UserProfile | null): boolean => {
-    if (!user || user.role !== 'client') return true; // Non-clients can see all cards
-
-    const userId = user.id.toLowerCase();
-    const userEmail = (user.email || '').toLowerCase().trim();
-    const userNameClean = user.name.toLowerCase().replace(/\(client\)/gi, '').trim();
-
-    // 1. Member check
-    const isMember = card.members?.some((m) => {
-      if (m.id && m.id.toLowerCase() === userId) return true;
-      if (m.email && userEmail && m.email.toLowerCase().trim() === userEmail) return true;
-      if (m.name) {
-        const mNameClean = m.name.toLowerCase().replace(/\(client\)/gi, '').trim();
-        if (mNameClean === userNameClean || mNameClean.includes(userNameClean) || userNameClean.includes(mNameClean)) {
-          return true;
-        }
-      }
-      return false;
-    });
-
-    if (isMember) return true;
-
-    // 2. Client Name check on card
-    const cardClientClean = (card.clientName || '').toLowerCase().replace(/\(client\)/gi, '').trim();
-    if (
-      cardClientClean.length > 0 &&
-      (cardClientClean === userNameClean ||
-        cardClientClean.includes(userNameClean) ||
-        userNameClean.includes(cardClientClean))
-    ) {
-      return true;
-    }
-
-    return false;
-  };
-
-  // Filter cards by client permissions & search term
+  // Filter cards by role permissions (Client, Visiteur, Merch, Resp Point Clients, etc.) & search term
   const filteredCards = cards.filter((card) => {
-    // Client role restriction: only show cards linked to this client
-    if (!isCardForClient(card, activeUser)) {
+    // Role-based visibility check (Client sees only client cards, Visiteur sees only invited cards, etc.)
+    if (!isCardVisibleToUser(card, activeUser)) {
       return false;
     }
 
@@ -321,6 +345,7 @@ export default function App() {
             cards={filteredCards}
             steps={steps}
             currentUser={activeUser}
+            allUsers={allUsers}
             onCardClick={setSelectedCard}
             onMoveCardStep={handleMoveCardStep}
           />
@@ -331,7 +356,7 @@ export default function App() {
             allUsers={allUsers}
             onCardClick={setSelectedCard}
           />
-        ) : (
+        ) : viewMode === 'clients' ? (
           <ClientsView
             cards={filteredCards}
             steps={steps}
@@ -352,6 +377,15 @@ export default function App() {
               )
             }
           />
+        ) : (
+          <DirectionView
+            cards={filteredCards}
+            steps={steps}
+            allUsers={allUsers}
+            currentUser={activeUser}
+            onCardClick={setSelectedCard}
+            onMoveCardStep={handleMoveCardStep}
+          />
         )}
       </main>
 
@@ -364,6 +398,8 @@ export default function App() {
           currentUser={activeUser}
           onClose={() => setSelectedCard(null)}
           onUpdateCard={handleUpdateCard}
+          onInviteVisitorUser={handleInviteVisitorUser}
+          onRemoveVisitorUser={handleRemoveVisitorUser}
         />
       )}
 
